@@ -1,0 +1,36 @@
+# Large data files
+data/raw/
+data/raw/**
+*.zip
+*.tar.gz
+
+# Preprocessed data kan erbij, ligt aan hoe groot het wordt
+
+# Model files
+*.h5
+*.hdf5
+*.pt
+*.pth
+*.ckpt
+*.pb
+models/checkpoints/
+models/saved_models/
+wandb/
+
+# Training outputs
+logs/
+runs/
+outputs/
+results/
+*.log
+
+# Large numpy/pickle files
+*.npy
+*.npz
+*.pkl
+*.pickle
+
+# Temporary files
+tmp/
+temp/
+cache/
