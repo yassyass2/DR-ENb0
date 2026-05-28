@@ -4,6 +4,7 @@
 
 **Course:** AI for Health - Group 5  
 **Members:** Yassine Abderrazik, Adel Atzouza, Ozeir Moradi, Musab Sivrikaya
+
 **Project:** Diabetic Retinopathy Classification using CNNs
 
 ## Overview
