@@ -1,0 +1,311 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Packages (all part of a standard TeX Live / MiKTeX install) ----------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{siunitx}
+\usepackage[hidelinks]{hyperref}
+
+\sisetup{detect-weight=true, detect-family=true}
+
+\title{Preprocessing Pipeline for Diabetic Retinopathy Grading\\
+on the APTOS~2019 Fundus Image Dataset}
+\author{AI for Health --- Group~5}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We describe the preprocessing pipeline applied to the APTOS~2019 Blindness
+Detection dataset prior to training a convolutional neural network for the
+five-class grading of diabetic retinopathy (DR). The pipeline addresses three
+characteristic challenges of colour fundus photography: heterogeneous image
+quality and framing, low and locally varying lesion contrast, and pronounced
+class imbalance. It comprises (i)~automated quality filtering to discard
+truncated retinas, (ii)~retinal field-of-view cropping and resizing to the
+input resolution of the target network, (iii)~green-channel extraction
+followed by Contrast Limited Adaptive Histogram Equalisation (CLAHE) for
+contrast enhancement, and (iv)~synthetic minority over-sampling (SMOTE) applied
+exclusively to the training partition. The resulting tensors are stored in a
+model-ready format for an EfficientNet-B0 classifier. We report the exact
+parameters and the per-class sample counts at each stage so that the procedure
+is fully reproducible.
+\end{abstract}
+
+%==========================================================================
+\section{Dataset}
+\label{sec:dataset}
+
+We use the APTOS~2019 Blindness Detection dataset, which contains colour
+fundus photographs labelled by clinicians on the five-point International
+Clinical Diabetic Retinopathy severity scale: \emph{0~--~no DR},
+\emph{1~--~mild}, \emph{2~--~moderate}, \emph{3~--~severe}, and
+\emph{4~--~proliferative DR}. The data are provided already partitioned into
+training, validation, and test splits, each accompanied by a comma-separated
+file mapping an image identifier (\texttt{id\_code}) to its grade
+(\texttt{diagnosis}).
+
+The images are acquired with a variety of fundus cameras under differing
+conditions; consequently they are highly heterogeneous in resolution
+(ranging from $480\times640$ to $2588\times3388$~pixels), aspect ratio, and
+illumination. Many images are framed in landscape orientation, in which the
+circular retinal field of view fills the full sensor height and is therefore
+clipped at the top and bottom while the left and right margins remain black.
+This is normal framing rather than image truncation, a distinction that
+directly informs the quality-filtering criterion of
+Section~\ref{sec:quality}. After verifying that the local and remotely hosted
+copies of the dataset were byte-identical, the complete dataset
+(\num{2930} training, \num{366} validation, and \num{366} test images) was
+used as the source.
+
+%==========================================================================
+\section{Preprocessing Pipeline}
+\label{sec:pipeline}
+
+The pipeline is designed for an EfficientNet-B0 backbone, whose native input
+is a $224\times224\times3$ tensor. The ordering of operations follows common
+practice in the retinal-imaging literature: low-quality samples are discarded
+first; geometric standardisation precedes intensity enhancement; and class
+balancing is performed last, after the train/validation/test split, so that
+synthetic samples can never leak into the evaluation partitions. The per-image
+operations are summarised in Algorithm-style form below, followed by a
+detailed description of each stage.
+
+\begin{enumerate}
+  \item \textbf{Quality filtering.} Detect and discard retinas that are
+        genuinely truncated or over-cropped (Section~\ref{sec:quality}).
+  \item \textbf{Field-of-view cropping.} Remove the uninformative black
+        border surrounding the retinal disc (Section~\ref{sec:crop}).
+  \item \textbf{Resizing.} Resample to $224\times224$~pixels
+        (Section~\ref{sec:resize}).
+  \item \textbf{Green-channel extraction and CLAHE.} Enhance vessel and
+        lesion contrast (Section~\ref{sec:clahe}).
+  \item \textbf{Class balancing.} Apply SMOTE to the training partition only
+        (Section~\ref{sec:smote}).
+\end{enumerate}
+
+%--------------------------------------------------------------------------
+\subsection{Quality Filtering of Truncated Retinas}
+\label{sec:quality}
+
+A binary retina mask $M$ is obtained by converting the image to greyscale and
+thresholding at an intensity of \num{15} (on the $[0,255]$ scale) to separate
+the illuminated fundus from the dark background. The mask is regularised with
+a morphological closing followed by an opening, both using a $7\times7$ square
+structuring element, which fills small specular gaps and removes isolated
+noise.
+
+To decide whether a retina is truncated we examine four border bands, each of
+width equal to \SI{1}{\percent} of the corresponding image dimension, located
+at the left, right, top, and bottom edges. For each band we compute the mean
+mask occupancy, i.e.\ the fraction of border pixels that belong to the retina.
+A band is considered ``filled'' when its occupancy exceeds \num{0.30}.
+
+A naive criterion that flags an image whenever \emph{any} single band is
+filled is unsuitable for this dataset: the normally framed landscape images
+of Section~\ref{sec:dataset} fill the top and bottom bands by construction,
+so such a rule discards roughly \SI{60}{\percent} of the data and, critically,
+the majority of the minority-grade samples. We therefore require that
+\emph{at least three} of the four bands be filled, which is characteristic of
+a retinal disc that has been clipped or over-cropped on multiple sides rather
+than one that is merely framed in landscape. Formally, an image is discarded
+when
+\begin{equation}
+  \sum_{s \in \{\text{L},\text{R},\text{T},\text{B}\}}
+  \mathbb{1}\!\left[\,o_s > 0.30\,\right] \;\ge\; 3,
+\end{equation}
+where $o_s$ denotes the occupancy of border band $s$ and $\mathbb{1}[\cdot]$
+is the indicator function. Under this criterion \num{81} of \num{2930}
+training images (\SI{2.8}{\percent}) are removed, while the class distribution
+is preserved almost exactly (Table~\ref{tab:counts}). The same filter is
+applied to the validation and test partitions, removing \num{10} and \num{7}
+images respectively.
+
+%--------------------------------------------------------------------------
+\subsection{Field-of-View Cropping}
+\label{sec:crop}
+
+Fundus photographs contain large black margins that carry no diagnostic
+information and waste effective resolution after resizing. We crop each image
+to the tight axis-aligned bounding box of its retinal region. The retinal
+region is identified by thresholding the greyscale image at an intensity of
+\num{20}; the bounding box is the smallest rectangle enclosing all pixels
+above this threshold. If no pixel exceeds the threshold the image is returned
+unchanged.
+
+%--------------------------------------------------------------------------
+\subsection{Resizing}
+\label{sec:resize}
+
+The cropped retina is resampled to a fixed $224\times224$ resolution to match
+the input dimensions of EfficientNet-B0. Resizing is performed with bilinear
+interpolation, the default of the imaging library used.
+
+%--------------------------------------------------------------------------
+\subsection{Green-Channel Extraction and CLAHE}
+\label{sec:clahe}
+
+In RGB fundus imagery the green channel exhibits the highest contrast between
+the retinal vasculature and lesions on the one hand and the background on the
+other, while the red channel is frequently saturated and the blue channel is
+noisy. We therefore retain only the green channel for subsequent processing.
+
+Because illumination varies markedly across a single retina, we apply Contrast
+Limited Adaptive Histogram Equalisation (CLAHE) to the green channel. CLAHE
+equalises the histogram within local tiles rather than globally, and clips the
+contribution of each histogram bin to limit noise amplification in homogeneous
+regions. We use a clip limit of \num{2.0} and a tile grid of $8\times8$,
+yielding locally enhanced contrast of microaneurysms, haemorrhages, and
+exudates without introducing strong artefacts.
+
+EfficientNet-B0 expects a three-channel input. As the informative signal is
+now contained in a single enhanced channel, we replicate the CLAHE-processed
+green channel across all three channels, producing a $224\times224\times3$
+tensor whose channels are identical. This preserves compatibility with the
+network stem and with ImageNet-pretrained weights while avoiding the
+introduction of redundant or noisy colour information.
+
+%--------------------------------------------------------------------------
+\subsection{Class Balancing with SMOTE}
+\label{sec:smote}
+
+The training partition is strongly imbalanced, with the \emph{no~DR} grade
+accounting for roughly half of all samples and the \emph{severe} grade for
+only about \SI{5}{\percent} (Table~\ref{tab:counts}). To prevent the
+classifier from being biased towards the majority grade we balance the
+training set with the Synthetic Minority Over-sampling Technique (SMOTE).
+Each preprocessed image is flattened into a feature vector of
+$224\times224\times3 = \num{150528}$ values, and SMOTE synthesises new
+minority-class samples by interpolating between a sample and its
+$k$~nearest neighbours of the same class ($k=5$). After resampling, the
+vectors are reshaped back to image tensors.
+
+Two points are essential for correctness. First, SMOTE is fitted on the
+\emph{training partition only}; the validation and test partitions retain
+their natural class distribution so that performance is estimated on a
+realistic prior. Second, the interpolation
+$\mathbf{x}_{\text{new}} = \mathbf{x}_i + \lambda\,(\mathbf{x}_j - \mathbf{x}_i)$,
+$\lambda \in [0,1]$, must be computed in a signed numeric type: performed
+directly on unsigned 8-bit pixels the difference $\mathbf{x}_j - \mathbf{x}_i$
+wraps around modulo~256 and yields corrupted synthetic images. We therefore
+cast the feature matrix to single-precision floating point before resampling,
+which additionally halves the peak memory footprint relative to
+double precision. The synthetic samples are subsequently rounded and clipped
+back to the $[0,255]$ unsigned 8-bit range.
+
+Balancing raises every training grade to the majority count of \num{1411},
+giving a balanced training set of \num{7055} images.
+
+\begin{table}[t]
+  \centering
+  \caption{Per-class image counts at each stage of the pipeline. The
+  training set is shown before quality filtering, after filtering, and after
+  SMOTE balancing; the validation and test sets are shown after filtering
+  (no balancing is applied to them). Grades follow the five-point clinical
+  DR scale (0--4).}
+  \label{tab:counts}
+  \begin{tabular}{lrrrrrr}
+    \toprule
+    & \multicolumn{5}{c}{DR grade} & \\
+    \cmidrule(lr){2-6}
+    Stage & 0 & 1 & 2 & 3 & 4 & Total \\
+    \midrule
+    Train (raw)            & 1434 & 300 & 808 & 154 & 234 & 2930 \\
+    Train (after filter)   & 1411 & 294 & 770 & 145 & 229 & 2849 \\
+    Train (after SMOTE)    & 1411 & 1411 & 1411 & 1411 & 1411 & 7055 \\
+    \midrule
+    Validation (after filter) & 169 & 40 & 98 & 21 & 28 & 356 \\
+    Test (after filter)       & 196 & 29 & 84 & 17 & 33 & 359 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+%==========================================================================
+\section{Output Format}
+\label{sec:output}
+
+Each partition is stored as a pair of arrays: an image tensor of shape
+$(N, 224, 224, 3)$ in unsigned 8-bit format and a corresponding integer label
+vector of length $N$. Pixel values are deliberately retained in the raw
+$[0,255]$ range rather than being normalised to $[0,1]$, because the Keras
+EfficientNet-B0 model incorporates its own rescaling layer and expects raw
+inputs through its dedicated preprocessing function; normalising here would
+apply the scaling twice. The synthetic samples produced by SMOTE have no
+natural file identifier, so the partitions are stored as serialised arrays
+rather than as individual image files.
+
+%==========================================================================
+\section{Reproducibility}
+\label{sec:repro}
+
+Table~\ref{tab:params} lists every parameter required to reproduce the
+pipeline. All randomised operations (SMOTE) use a fixed seed of \num{42}.
+
+\begin{table}[t]
+  \centering
+  \caption{Pipeline parameters.}
+  \label{tab:params}
+  \begin{tabular}{lll}
+    \toprule
+    Stage & Parameter & Value \\
+    \midrule
+    Retina mask        & Greyscale threshold        & 15 \\
+                       & Morphological kernel       & $7\times7$ \\
+                       & Operations                 & close, then open \\
+    \midrule
+    Quality filter     & Border-band width          & \SI{1}{\percent} of side \\
+                       & Occupancy threshold        & 0.30 \\
+                       & Filled-bands required      & $\ge 3$ of 4 \\
+    \midrule
+    FOV crop           & Greyscale threshold        & 20 \\
+    \midrule
+    Resize             & Target resolution          & $224\times224$ \\
+                       & Interpolation              & bilinear \\
+    \midrule
+    Contrast           & Channel                    & green \\
+                       & CLAHE clip limit           & 2.0 \\
+                       & CLAHE tile grid            & $8\times8$ \\
+                       & Output channels            & green replicated $\times 3$ \\
+    \midrule
+    Balancing          & Method                     & SMOTE \\
+                       & Neighbours $k$             & 5 \\
+                       & Working precision          & float32 \\
+                       & Random seed                & 42 \\
+                       & Applied to                 & training set only \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+%==========================================================================
+\begin{thebibliography}{9}
+
+\bibitem{aptos2019}
+Asia Pacific Tele-Ophthalmology Society,
+\emph{APTOS 2019 Blindness Detection},
+Kaggle, 2019.
+
+\bibitem{efficientnet}
+M.~Tan and Q.~V.~Le,
+``EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks,''
+\emph{Proc.\ Int.\ Conf.\ on Machine Learning (ICML)}, 2019.
+
+\bibitem{clahe}
+S.~M.~Pizer \emph{et al.},
+``Adaptive Histogram Equalization and Its Variations,''
+\emph{Computer Vision, Graphics, and Image Processing}, vol.~39, no.~3,
+pp.~355--368, 1987.
+
+\bibitem{smote}
+N.~V.~Chawla, K.~W.~Bowyer, L.~O.~Hall, and W.~P.~Kegelmeyer,
+``SMOTE: Synthetic Minority Over-sampling Technique,''
+\emph{Journal of Artificial Intelligence Research}, vol.~16, pp.~321--357,
+2002.
+
+\end{thebibliography}
+
+\end{document}

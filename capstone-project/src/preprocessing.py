@@ -44,8 +44,14 @@ def apply_oversampling(X_train, y_train, random_state=42):
     # Image dimensions
     n, h, w, c = X_train.shape
 
-    # Flatten image to an array of integers
-    X_flat = X_train.reshape(n, h * w * c)
+    # Flatten each image to a 1-D feature vector. SMOTE creates synthetic
+    # samples by interpolating between a sample and its neighbours
+    # (sample + step * (neighbour - sample)). On a uint8 array that subtraction
+    # wraps around (e.g. 100 - 120 -> 236), producing corrupted synthetic
+    # images, so we cast to a floating dtype first. float32 (rather than the
+    # float64 SMOTE would otherwise use) roughly halves peak memory, which
+    # matters for large image sets.
+    X_flat = X_train.reshape(n, h * w * c).astype(np.float32)
 
     smote = SMOTE(random_state=random_state)
     X_resampled_flat, y_resampled = smote.fit_resample(X_flat, y_train)

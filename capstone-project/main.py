@@ -1,27 +1,107 @@
-import kagglehub
-import pandas as pd
-import cv2
+"""
+Apply the full preprocessing pipeline (src/pre_proc_pipeline.py) to the
+APTOS-2019 data and save the model-ready arrays to ``data/preprocessed``.
+
+Data source: the dataset is pulled with ``kagglehub`` rather than the local
+``data/raw`` folder. ``data/raw`` is only a partial copy (1463 of the 2930
+train images), whereas kagglehub provides the complete set (verified
+byte-identical images and CSVs). Using kagglehub recovers the ~1467 missing
+train images, which include most of the minority-class samples.
+
+The data is already split into train / validation / test, each with its own
+CSV and image folder:
+
+    <dataset>/
+        train_1.csv   ->  train_images/train_images/<id_code>.png
+        valid.csv     ->  val_images/val_images/<id_code>.png
+        test.csv      ->  test_images/test_images/<id_code>.png
+
+Because the split already exists, we do NOT re-split here. Instead each split
+gets the per-image pipeline (cut-off filtering -> crop -> resize 224x224 ->
+green channel + CLAHE), and SMOTE class balancing is applied to the TRAINING
+split only. Validation and test keep their natural class distribution for an
+honest evaluation.
+
+Outputs (uint8 arrays of shape (N, 224, 224, 3) and integer label arrays):
+
+    data/preprocessed/
+        X_train.npy, y_train.npy   (SMOTE-balanced)
+        X_val.npy,   y_val.npy
+        X_test.npy,  y_test.npy
+"""
 
 from pathlib import Path
 
-import src.preprocessing as pp
+import kagglehub
+import numpy as np
+import pandas as pd
 
-dataset_path_str = kagglehub.dataset_download("mariaherrerot/aptos2019")
-dataset_path = Path(dataset_path_str)
+from src.pre_proc_pipeline import build_dataset, apply_oversampling
 
-train_csv = dataset_path / "train_1.csv"
-df = pd.read_csv(train_csv)
+RAW_DIR = Path(kagglehub.dataset_download("mariaherrerot/aptos2019"))
+OUT_DIR = Path("data/preprocessed")
 
-first_image = df.iloc[0]["id_code"] + ".png"
-first_image = pp.preprocess_dr_image(
-    dataset_path / "train_images" / "train_images" / first_image
-)
+# (split name, csv file, image folder) -- folder is nested one level deep.
+SPLITS = {
+    "train": ("train_1.csv", "train_images/train_images"),
+    "val": ("valid.csv", "val_images/val_images"),
+    "test": ("test.csv", "test_images/test_images"),
+}
 
-second_image = df.iloc[3]["id_code"] + ".png"
-second_image = pp.preprocess_dr_image(
-    dataset_path / "train_images" / "train_images" / second_image
-)
+ID_COLUMN = "id_code"
+LABEL_COLUMN = "diagnosis"
+IMAGE_EXTENSION = ".png"
 
 
-cv2.imwrite("test1.png", first_image)
-cv2.imwrite("test2.png", second_image)
+def load_split_df(csv_name: str, images_dir: Path) -> pd.DataFrame:
+    """Load a split CSV and keep only the rows whose image is present on disk."""
+    df = pd.read_csv(RAW_DIR / csv_name)
+
+    exists = df[ID_COLUMN].apply(
+        lambda code: (images_dir / f"{code}{IMAGE_EXTENSION}").exists()
+    )
+    n_missing = int((~exists).sum())
+    if n_missing:
+        print(f"  {n_missing} rows have no image on disk and are skipped.")
+
+    return df[exists].reset_index(drop=True)
+
+
+def main() -> None:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    for split, (csv_name, folder) in SPLITS.items():
+        images_dir = RAW_DIR / folder
+        print(f"\n=== {split.upper()} ===")
+
+        df = load_split_df(csv_name, images_dir)
+
+        # Per-image pipeline: cut-off filter -> crop -> resize -> green + CLAHE
+        X, y = build_dataset(
+            df,
+            images_dir,
+            id_column=ID_COLUMN,
+            label_column=LABEL_COLUMN,
+            image_extension=IMAGE_EXTENSION,
+            skip_cut_off=True,
+        )
+
+        # SMOTE balancing on the training split only.
+        if split == "train":
+            counts = dict(zip(*np.unique(y, return_counts=True)))
+            print(f"  Class distribution before SMOTE: {counts}")
+            X, y = apply_oversampling(X, y)
+            # SMOTE returns float32; round back to the uint8 image range.
+            X = np.clip(np.round(X), 0, 255).astype(np.uint8)
+            counts = dict(zip(*np.unique(y, return_counts=True)))
+            print(f"  Class distribution after  SMOTE: {counts}")
+
+        np.save(OUT_DIR / f"X_{split}.npy", X)
+        np.save(OUT_DIR / f"y_{split}.npy", y)
+        print(f"  Saved X_{split} {X.shape} ({X.dtype}) and y_{split} {y.shape}")
+
+    print(f"\nDone. Preprocessed arrays written to {OUT_DIR.resolve()}")
+
+
+if __name__ == "__main__":
+    main()
