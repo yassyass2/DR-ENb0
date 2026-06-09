@@ -17,7 +17,7 @@ papers). The guiding principles are: filter bad data first, standardise
 geometry before enhancing intensity, and only balance classes *after* the
 train/validation split so that synthetic samples never leak into validation.
 
-  Per-image (steps 1-6):
+  Per-image (steps 1-7):
     1. Quality filtering   -> discard cut-off / partially-imaged retinas
     2. Retina cropping     -> remove the uninformative black border
     3. Resize              -> 224 x 224 (EfficientNet-B0 input size)
@@ -30,15 +30,19 @@ train/validation split so that synthetic samples never leak into validation.
     6. Median blur         -> noise reduction with a small (3x3) kernel that
                               lowers sensor noise without blurring the retinal
                               structures
+    7. Normalisation       -> divide pixel values by 255 so each channel lies
+                              in [0, 1]
 
-  Dataset-level (steps 7-8):
-    7. Train/validation split
-    8. SMOTE               -> balance the TRAINING partition only
+  Dataset-level (steps 8-9):
+    8. Train/validation split
+    9. SMOTE               -> balance the TRAINING partition only
 
-Note on intensity scaling: images are kept as ``uint8`` in the [0, 255] range
-throughout. The Keras ``EfficientNetB0`` model includes its own rescaling /
-normalisation layer (``efficientnet.preprocess_input``), so the network should
-be fed raw [0, 255] values rather than pre-normalised ones.
+Note on intensity scaling: pixel values are normalised to the [0, 1] range by
+dividing by 255 (the final per-image step), so the saved arrays are
+``float32``. Caveat: the Keras ``EfficientNetB0`` model ships its own rescaling
+layer (``efficientnet.preprocess_input``); feed it these already-normalised
+values *without* calling ``preprocess_input`` again, otherwise the scaling is
+applied twice.
 """
 
 from __future__ import annotations
@@ -114,7 +118,7 @@ def is_cut_off(
 
 
 # ---------------------------------------------------------------------------
-# Steps 2-5: per-image transform
+# Steps 2-7: per-image transform
 # ---------------------------------------------------------------------------
 def extract_green_channel_clahe(
     image: np.ndarray,
@@ -151,14 +155,16 @@ def preprocess_image(
     median_kernel_size: int = 3,
 ) -> np.ndarray:
     """
-    Apply the per-image part of the pipeline (steps 2-6) to a single
+    Apply the per-image part of the pipeline (steps 2-7) to a single
     already-loaded BGR image.
 
       crop black border -> resize to 224x224 -> green channel + CLAHE
-      -> median blur
+      -> median blur -> normalise to [0, 1]
 
     ``median_kernel_size`` must be a positive odd integer (OpenCV requirement);
     the default of 3 reduces noise without smearing fine retinal structures.
+
+    Returns a ``float32`` image with values in [0, 1].
     """
     image = crop_black_border(image)
     image = cv2.resize(image, (image_size, image_size))
@@ -167,8 +173,12 @@ def preprocess_image(
     )
     # Step 6: noise reduction. Applied after CLAHE so it suppresses any noise
     # the contrast enhancement amplified, while the small kernel preserves
-    # vessel and lesion edges.
+    # vessel and lesion edges. Kept on the uint8 image because cv2.medianBlur
+    # requires an integer dtype.
     image = cv2.medianBlur(image, median_kernel_size)
+    # Step 7: normalise pixel intensities to [0, 1] (paper eq. 1). Done last,
+    # after median blur, because OpenCV's blur needs uint8 input.
+    image = image.astype(np.float32) / 255.0
     return image
 
 
@@ -179,11 +189,11 @@ def preprocess_image_path(
     **clahe_kwargs,
 ) -> np.ndarray | None:
     """
-    Read an image from disk and run steps 1-5.
+    Read an image from disk and run steps 1-7.
 
-    Returns the preprocessed ``uint8`` image of shape
-    ``(image_size, image_size, 3)``, or ``None`` if the image could not be read
-    or was filtered out as cut off.
+    Returns the preprocessed ``float32`` image of shape
+    ``(image_size, image_size, 3)`` with values in [0, 1], or ``None`` if the
+    image could not be read or was filtered out as cut off.
     """
     image = cv2.imread(str(image_path))
     if image is None:
@@ -197,7 +207,7 @@ def preprocess_image_path(
 
 
 # ---------------------------------------------------------------------------
-# Dataset assembly + steps 6-7
+# Dataset assembly + steps 8-9
 # ---------------------------------------------------------------------------
 def build_dataset(
     df,
@@ -216,7 +226,7 @@ def build_dataset(
 
     Returns
     -------
-    X : np.ndarray, shape (N, image_size, image_size, 3), dtype uint8
+    X : np.ndarray, shape (N, image_size, image_size, 3), dtype float32, [0, 1]
     y : np.ndarray, shape (N,)
     """
     images_dir = Path(images_dir)
@@ -243,7 +253,7 @@ def build_dataset(
 
     print(f"Kept {len(images)} images, skipped {n_skipped} (unreadable/cut-off).")
 
-    X = np.asarray(images, dtype=np.uint8)
+    X = np.asarray(images, dtype=np.float32)
     y = np.asarray(labels)
     return X, y
 
@@ -263,9 +273,9 @@ def run_pipeline(
     """
     End-to-end preprocessing pipeline.
 
-      1-5. Per-image preprocessing (build_dataset)
-      6.   Stratified train/validation split
-      7.   SMOTE on the TRAINING partition only
+      1-7. Per-image preprocessing (build_dataset)
+      8.   Stratified train/validation split
+      9.   SMOTE on the TRAINING partition only
 
     SMOTE is applied after the split so synthetic samples never leak into the
     validation set. It is intentionally *not* applied to the validation set,
@@ -298,7 +308,9 @@ def run_pipeline(
         X_train, y_train = apply_oversampling(
             X_train, y_train, random_state=random_state
         )
-        X_train = X_train.astype(np.uint8)
+        # apply_oversampling already returns float32; interpolating two values
+        # in [0, 1] stays in [0, 1], so no clipping back to a range is needed.
+        X_train = X_train.astype(np.float32)
         print(f"After SMOTE: training set has {len(X_train)} images.")
 
     return {

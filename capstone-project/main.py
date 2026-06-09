@@ -18,11 +18,12 @@ CSV and image folder:
 
 Because the split already exists, we do NOT re-split here. Instead each split
 gets the per-image pipeline (cut-off filtering -> crop -> resize 224x224 ->
-green channel + CLAHE), and SMOTE class balancing is applied to the TRAINING
-split only. Validation and test keep their natural class distribution for an
-honest evaluation.
+green channel + CLAHE -> median blur -> normalise to [0, 1]), and SMOTE class
+balancing is applied to the TRAINING split only. Validation and test keep their
+natural class distribution for an honest evaluation.
 
-Outputs (uint8 arrays of shape (N, 224, 224, 3) and integer label arrays):
+Outputs (float32 arrays in [0, 1] of shape (N, 224, 224, 3) and integer label
+arrays):
 
     data/preprocessed/
         X_train.npy, y_train.npy   (SMOTE-balanced)
@@ -77,6 +78,7 @@ def main() -> None:
         df = load_split_df(csv_name, images_dir)
 
         # Per-image pipeline: cut-off filter -> crop -> resize -> green + CLAHE
+        # -> median blur -> normalise to [0, 1]
         X, y = build_dataset(
             df,
             images_dir,
@@ -91,8 +93,9 @@ def main() -> None:
             counts = dict(zip(*np.unique(y, return_counts=True)))
             print(f"  Class distribution before SMOTE: {counts}")
             X, y = apply_oversampling(X, y)
-            # SMOTE returns float32; round back to the uint8 image range.
-            X = np.clip(np.round(X), 0, 255).astype(np.uint8)
+            # apply_oversampling returns float32; interpolating two values in
+            # [0, 1] stays in [0, 1], so the data is already model-ready.
+            X = X.astype(np.float32)
             counts = dict(zip(*np.unique(y, return_counts=True)))
             print(f"  Class distribution after  SMOTE: {counts}")
 
