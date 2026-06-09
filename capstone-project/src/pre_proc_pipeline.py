@@ -17,7 +17,7 @@ papers). The guiding principles are: filter bad data first, standardise
 geometry before enhancing intensity, and only balance classes *after* the
 train/validation split so that synthetic samples never leak into validation.
 
-  Per-image (steps 1-5):
+  Per-image (steps 1-6):
     1. Quality filtering   -> discard cut-off / partially-imaged retinas
     2. Retina cropping     -> remove the uninformative black border
     3. Resize              -> 224 x 224 (EfficientNet-B0 input size)
@@ -27,10 +27,13 @@ train/validation split so that synthetic samples never leak into validation.
                               Equalisation on the green channel, then stack
                               to 3 channels so the input shape matches the
                               EfficientNet-B0 stem
+    6. Median blur         -> noise reduction with a small (3x3) kernel that
+                              lowers sensor noise without blurring the retinal
+                              structures
 
-  Dataset-level (steps 6-7):
-    6. Train/validation split
-    7. SMOTE               -> balance the TRAINING partition only
+  Dataset-level (steps 7-8):
+    7. Train/validation split
+    8. SMOTE               -> balance the TRAINING partition only
 
 Note on intensity scaling: images are kept as ``uint8`` in the [0, 255] range
 throughout. The Keras ``EfficientNetB0`` model includes its own rescaling /
@@ -145,18 +148,27 @@ def preprocess_image(
     image_size: int = DEFAULT_IMAGE_SIZE,
     clip_limit: float = 2.0,
     tile_grid_size: tuple[int, int] = (8, 8),
+    median_kernel_size: int = 3,
 ) -> np.ndarray:
     """
-    Apply the per-image part of the pipeline (steps 2-5) to a single
+    Apply the per-image part of the pipeline (steps 2-6) to a single
     already-loaded BGR image.
 
       crop black border -> resize to 224x224 -> green channel + CLAHE
+      -> median blur
+
+    ``median_kernel_size`` must be a positive odd integer (OpenCV requirement);
+    the default of 3 reduces noise without smearing fine retinal structures.
     """
     image = crop_black_border(image)
     image = cv2.resize(image, (image_size, image_size))
     image = extract_green_channel_clahe(
         image, clip_limit=clip_limit, tile_grid_size=tile_grid_size
     )
+    # Step 6: noise reduction. Applied after CLAHE so it suppresses any noise
+    # the contrast enhancement amplified, while the small kernel preserves
+    # vessel and lesion edges.
+    image = cv2.medianBlur(image, median_kernel_size)
     return image
 
 
