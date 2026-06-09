@@ -59,12 +59,11 @@ import numpy as np
 from tqdm import tqdm
 
 from src.preprocessing import (
+    DEFAULT_IMAGE_SIZE,
     crop_black_border,
     reduce_fundus_noise,
     apply_oversampling,
 )
-
-DEFAULT_IMAGE_SIZE = 224  # EfficientNet-B0 input resolution
 
 
 # ---------------------------------------------------------------------------

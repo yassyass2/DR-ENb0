@@ -2,7 +2,8 @@ import cv2
 import numpy as np
 from imblearn.over_sampling import SMOTE
 
-DEFAULT_IMAGE_SIZE = 224  # For EfficientNet-B0
+DEFAULT_IMAGE_SIZE = 224  # EfficientNet-B0 input resolution; shared source of
+#                           truth, imported by src/pre_proc_pipeline.py.
 
 
 def crop_black_border(image: np.ndarray, threshold: int = 20) -> np.ndarray:
