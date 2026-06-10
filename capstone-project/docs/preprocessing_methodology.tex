@@ -23,15 +23,17 @@ on the APTOS~2019 Fundus Image Dataset}
 \begin{abstract}
 We describe the preprocessing pipeline applied to the APTOS~2019 Blindness
 Detection dataset prior to training a convolutional neural network for the
-five-class grading of diabetic retinopathy (DR). The pipeline addresses three
+five-class grading of diabetic retinopathy (DR). The pipeline addresses four
 characteristic challenges of colour fundus photography: heterogeneous image
-quality and framing, low and locally varying lesion contrast, and pronounced
-class imbalance. It comprises (i)~automated quality filtering to discard
-truncated retinas, (ii)~retinal field-of-view cropping and resizing to the
-input resolution of the target network, (iii)~green-channel extraction
-followed by Contrast Limited Adaptive Histogram Equalisation (CLAHE) for
-contrast enhancement, and (iv)~synthetic minority over-sampling (SMOTE) applied
-exclusively to the training partition. The resulting tensors are stored in a
+quality and framing, low and locally varying lesion contrast, sensor noise, and
+pronounced class imbalance. It comprises (i)~automated quality filtering to
+discard truncated retinas, (ii)~retinal field-of-view cropping and resizing to
+the input resolution of the target network, (iii)~mild edge-preserving noise
+reduction, (iv)~green-channel extraction followed by Contrast Limited Adaptive
+Histogram Equalisation (CLAHE) for contrast enhancement, (v)~normalisation of
+pixel intensities to the unit interval, and (vi)~synthetic minority
+over-sampling (SMOTE) applied exclusively to the training partition. The
+resulting tensors are stored in a
 model-ready format for an EfficientNet-B0 classifier. We report the exact
 parameters and the per-class sample counts at each stage so that the procedure
 is fully reproducible.
@@ -83,8 +85,12 @@ detailed description of each stage.
         border surrounding the retinal disc (Section~\ref{sec:crop}).
   \item \textbf{Resizing.} Resample to $224\times224$~pixels
         (Section~\ref{sec:resize}).
+  \item \textbf{Noise reduction.} Mild edge-preserving denoising to suppress
+        sensor noise before contrast enhancement (Section~\ref{sec:denoise}).
   \item \textbf{Green-channel extraction and CLAHE.} Enhance vessel and
         lesion contrast (Section~\ref{sec:clahe}).
+  \item \textbf{Normalisation.} Scale pixel intensities to the unit interval
+        $[0,1]$ (Section~\ref{sec:normalise}).
   \item \textbf{Class balancing.} Apply SMOTE to the training partition only
         (Section~\ref{sec:smote}).
 \end{enumerate}
@@ -143,8 +149,25 @@ unchanged.
 \label{sec:resize}
 
 The cropped retina is resampled to a fixed $224\times224$ resolution to match
-the input dimensions of EfficientNet-B0. Resizing is performed with bilinear
-interpolation, the default of the imaging library used.
+the input dimensions of EfficientNet-B0. Resizing uses area interpolation
+(OpenCV's \texttt{INTER\_AREA}), which is well suited to the downscaling that
+dominates this heterogeneous-resolution dataset.
+
+%--------------------------------------------------------------------------
+\subsection{Noise Reduction}
+\label{sec:denoise}
+
+Colour fundus photographs carry sensor and compression noise. Because the
+subsequent CLAHE step (Section~\ref{sec:clahe}) amplifies local contrast and
+would otherwise accentuate this noise, we denoise \emph{before} contrast
+enhancement. We apply a mild edge-preserving bilateral filter (diameter
+$d=5$, $\sigma_{\text{colour}}=\sigma_{\text{space}}=\num{35}$), which smooths
+homogeneous regions while preserving the edges of vessels and lesions, the
+diagnostically relevant structures. The conservative setting avoids erasing
+small lesions such as microaneurysms. Alternative methods (non-local means,
+median, Gaussian) are selectable behind a single parameter, with the bilateral
+filter as the default. Denoising operates on the 8-bit image, before the
+normalisation of Section~\ref{sec:normalise}.
 
 %--------------------------------------------------------------------------
 \subsection{Green-Channel Extraction and CLAHE}
@@ -171,6 +194,29 @@ network stem and with ImageNet-pretrained weights while avoiding the
 introduction of redundant or noisy colour information.
 
 %--------------------------------------------------------------------------
+\subsection{Intensity Normalisation}
+\label{sec:normalise}
+
+Finally, the pixel intensities are normalised from the $[0,255]$ integer range
+to the $[0,1]$ unit interval by dividing by~\num{255},
+\begin{equation}
+  p_{\text{norm}} = \frac{p}{255},
+\end{equation}
+where $p$ is the original pixel value and $p_{\text{norm}}$ its normalised
+counterpart. Normalising the dynamic range across images acquired under
+different illumination standardises the input statistics and stabilises and
+accelerates the optimisation of the downstream network. The arrays are
+consequently stored in single-precision floating point
+(Section~\ref{sec:output}).
+
+A practical caveat for deployment: the Keras \texttt{EfficientNetB0} model
+provides its own rescaling layer through
+\texttt{efficientnet.preprocess\_input}. Because the data produced here is
+already scaled to $[0,1]$, it must be fed to the network \emph{without} a
+second application of \texttt{preprocess\_input}, otherwise the scaling would
+be applied twice.
+
+%--------------------------------------------------------------------------
 \subsection{Class Balancing with SMOTE}
 \label{sec:smote}
 
@@ -188,15 +234,16 @@ vectors are reshaped back to image tensors.
 Two points are essential for correctness. First, SMOTE is fitted on the
 \emph{training partition only}; the validation and test partitions retain
 their natural class distribution so that performance is estimated on a
-realistic prior. Second, the interpolation
+realistic prior. Second, SMOTE operates on the already-normalised floating
+point images of Section~\ref{sec:normalise}, which sidesteps a subtle failure
+mode: performed directly on unsigned 8-bit pixels, the interpolation
 $\mathbf{x}_{\text{new}} = \mathbf{x}_i + \lambda\,(\mathbf{x}_j - \mathbf{x}_i)$,
-$\lambda \in [0,1]$, must be computed in a signed numeric type: performed
-directly on unsigned 8-bit pixels the difference $\mathbf{x}_j - \mathbf{x}_i$
-wraps around modulo~256 and yields corrupted synthetic images. We therefore
-cast the feature matrix to single-precision floating point before resampling,
-which additionally halves the peak memory footprint relative to
-double precision. The synthetic samples are subsequently rounded and clipped
-back to the $[0,255]$ unsigned 8-bit range.
+$\lambda \in [0,1]$, would wrap around modulo~256 wherever the difference
+$\mathbf{x}_j - \mathbf{x}_i$ is negative and yield corrupted synthetic images.
+Because both operands already lie in $[0,1]$, every interpolated sample also
+lies in $[0,1]$, so no rounding or clipping is required. The feature matrix is
+kept in single-precision floating point, which halves the peak memory footprint
+relative to the double precision SMOTE would otherwise use.
 
 Balancing raises every training grade to the majority count of \num{1411},
 giving a balanced training set of \num{7055} images.
@@ -230,14 +277,14 @@ giving a balanced training set of \num{7055} images.
 \label{sec:output}
 
 Each partition is stored as a pair of arrays: an image tensor of shape
-$(N, 224, 224, 3)$ in unsigned 8-bit format and a corresponding integer label
-vector of length $N$. Pixel values are deliberately retained in the raw
-$[0,255]$ range rather than being normalised to $[0,1]$, because the Keras
-EfficientNet-B0 model incorporates its own rescaling layer and expects raw
-inputs through its dedicated preprocessing function; normalising here would
-apply the scaling twice. The synthetic samples produced by SMOTE have no
-natural file identifier, so the partitions are stored as serialised arrays
-rather than as individual image files.
+$(N, 224, 224, 3)$ in single-precision floating point with values in $[0,1]$
+and a corresponding integer label vector of length $N$. As noted in
+Section~\ref{sec:normalise}, because the data is already normalised it should
+be passed to the Keras EfficientNet-B0 model \emph{without} a further call to
+its \texttt{preprocess\_input} rescaling layer, which would otherwise apply the
+scaling twice. The synthetic samples produced by SMOTE have no natural file
+identifier, so the partitions are stored as serialised arrays rather than as
+individual image files.
 
 %==========================================================================
 \section{Reproducibility}
@@ -265,12 +312,20 @@ pipeline. All randomised operations (SMOTE) use a fixed seed of \num{42}.
     FOV crop           & Greyscale threshold        & 20 \\
     \midrule
     Resize             & Target resolution          & $224\times224$ \\
-                       & Interpolation              & bilinear \\
+                       & Interpolation              & area (\texttt{INTER\_AREA}) \\
+    \midrule
+    Noise reduction    & Filter (default)           & bilateral \\
+                       & Diameter $d$               & 5 \\
+                       & $\sigma_{\text{colour}}$, $\sigma_{\text{space}}$ & 35 \\
     \midrule
     Contrast           & Channel                    & green \\
                        & CLAHE clip limit           & 2.0 \\
                        & CLAHE tile grid            & $8\times8$ \\
                        & Output channels            & green replicated $\times 3$ \\
+    \midrule
+    Normalisation      & Scaling                    & divide by 255 \\
+                       & Output range               & $[0,1]$ \\
+                       & Output dtype               & float32 \\
     \midrule
     Balancing          & Method                     & SMOTE \\
                        & Neighbours $k$             & 5 \\

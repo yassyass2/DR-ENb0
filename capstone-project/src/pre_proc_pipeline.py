@@ -11,10 +11,43 @@ Pipeline:
   -> green channel extraction
   -> CLAHE
   -> stack to 3 channels
+  -> normalise to [0, 1]
   -> SMOTE on training data only
 
-Images are kept as uint8 in the [0, 255] range. This matches the usual
-EfficientNet input flow where model preprocessing/normalisation happens later.
+Order of operations
+-------------------
+The ordering below follows common practice in published DR / fundus-image
+work (e.g. Kaggle APTOS solutions, retinal-vessel and lesion-detection
+papers). The guiding principles are: filter bad data first, standardise
+geometry before enhancing intensity, and only balance classes *after* the
+train/validation split so that synthetic samples never leak into validation.
+
+  Per-image (steps 1-7):
+    1. Quality filtering   -> discard cut-off / partially-imaged retinas
+    2. Retina cropping     -> remove the uninformative black border
+    3. Resize              -> 224 x 224 (EfficientNet-B0 input size)
+    4. Noise reduction     -> mild, edge-preserving denoising (bilateral by
+                              default) that suppresses sensor noise without
+                              blurring fine retinal structures
+    5. Green channel       -> the green channel has the best vessel/lesion
+                              contrast and least noise in RGB fundus images
+    6. CLAHE               -> Contrast Limited Adaptive Histogram
+                              Equalisation on the green channel, then stack
+                              to 3 channels so the input shape matches the
+                              EfficientNet-B0 stem
+    7. Normalisation       -> divide pixel values by 255 so each channel lies
+                              in [0, 1]
+
+  Dataset-level (steps 8-9):
+    8. Train/validation split
+    9. SMOTE               -> balance the TRAINING partition only
+
+Note on intensity scaling: pixel values are normalised to the [0, 1] range by
+dividing by 255 (the final per-image step), so the saved arrays are
+``float32``. Caveat: the Keras ``EfficientNetB0`` model ships its own rescaling
+layer (``efficientnet.preprocess_input``); feed it these already-normalised
+values *without* calling ``preprocess_input`` again, otherwise the scaling is
+applied twice.
 """
 
 from __future__ import annotations
@@ -26,12 +59,11 @@ import numpy as np
 from tqdm import tqdm
 
 from src.preprocessing import (
+    DEFAULT_IMAGE_SIZE,
     crop_black_border,
     reduce_fundus_noise,
     apply_oversampling,
 )
-
-DEFAULT_IMAGE_SIZE = 224  # EfficientNet-B0 input resolution
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +126,7 @@ def is_cut_off(
 
 
 # ---------------------------------------------------------------------------
-# Steps 2-6: per-image transform
+# Steps 2-7: per-image transform
 # ---------------------------------------------------------------------------
 def extract_green_channel_clahe(
     image: np.ndarray,
@@ -133,15 +165,16 @@ def preprocess_image(
     tile_grid_size: tuple[int, int] = (8, 8),
 ) -> np.ndarray:
     """
-    Apply the per-image pipeline to one already-loaded BGR image.
+    Apply the per-image part of the pipeline (steps 2-7) to a single
+    already-loaded BGR image.
 
-    Order:
-        crop black border
-        -> resize
-        -> noise reduction
-        -> green channel
-        -> CLAHE
-        -> 3-channel uint8 output
+      crop black border -> resize to 224x224 -> noise reduction
+      -> green channel + CLAHE -> normalise to [0, 1]
+
+    Noise reduction uses ``denoise_method`` (see ``reduce_fundus_noise``); the
+    default is an edge-preserving bilateral filter.
+
+    Returns a ``float32`` image with values in [0, 1].
     """
     image = crop_black_border(image)
 
@@ -163,7 +196,10 @@ def preprocess_image(
         to_three_channels=True,
     )
 
-    return image.astype(np.uint8)
+    # Final per-image step: normalise pixel intensities to [0, 1] (paper eq. 1).
+    # Done last because the OpenCV operations above all require uint8 input.
+    image = image.astype(np.float32) / 255.0
+    return image
 
 
 def preprocess_image_path(
@@ -174,15 +210,16 @@ def preprocess_image_path(
     **clahe_kwargs,
 ) -> np.ndarray | None:
     """
-    Read an image from disk and run the per-image preprocessing pipeline.
+    Read an image from disk and run the per-image preprocessing pipeline
+    (steps 1-7).
 
-    Returns:
-        uint8 image of shape (image_size, image_size, 3), or None if the image
-        could not be read or was filtered out as cut off.
+    Returns the preprocessed ``float32`` image of shape
+    ``(image_size, image_size, 3)`` with values in [0, 1], or ``None`` if the
+    image could not be read or was filtered out as cut off.
 
-    Important:
-        skip_cut_off=True means cut-off filtering is skipped.
-        skip_cut_off=False means cut-off filtering is applied.
+    Note:
+        skip_cut_off=True  -> cut-off filtering is skipped.
+        skip_cut_off=False -> cut-off filtering is applied.
     """
     image = cv2.imread(str(image_path))
 
@@ -202,7 +239,7 @@ def preprocess_image_path(
 
 
 # ---------------------------------------------------------------------------
-# Dataset assembly
+# Dataset assembly + steps 8-9
 # ---------------------------------------------------------------------------
 def build_dataset(
     df,
@@ -221,9 +258,10 @@ def build_dataset(
     Cut-off images are dropped together with their labels only when
     skip_cut_off=False.
 
-    Returns:
-        X: uint8 array, shape (N, image_size, image_size, 3)
-        y: int64 array, shape (N,)
+    Returns
+    -------
+    X : np.ndarray, shape (N, image_size, image_size, 3), dtype float32, [0, 1]
+    y : np.ndarray, shape (N,), dtype int64
     """
     images_dir = Path(images_dir)
 
@@ -251,7 +289,7 @@ def build_dataset(
 
     print(f"Kept {len(images)} images, skipped {n_skipped} unreadable/cut-off images.")
 
-    X = np.asarray(images, dtype=np.uint8)
+    X = np.asarray(images, dtype=np.float32)
     y = np.asarray(labels, dtype=np.int64)
 
     return X, y
@@ -274,12 +312,14 @@ def run_pipeline(
     """
     End-to-end preprocessing pipeline.
 
-    This version creates a train/validation split internally.
+      1-7. Per-image preprocessing (build_dataset)
+      8.   Stratified train/validation split
+      9.   SMOTE on the TRAINING partition only
 
-    Use this when your dataset is not already split.
-
-    If your dataset already has train/val/test CSVs, use build_dataset()
-    separately for each split and apply SMOTE only to the training split.
+    This version creates a train/validation split internally. Use it when your
+    dataset is not already split. If your dataset already has train/val/test
+    CSVs, use build_dataset() separately for each split and apply SMOTE only to
+    the training split.
     """
     from sklearn.model_selection import train_test_split
 
@@ -309,8 +349,9 @@ def run_pipeline(
             y_train,
             random_state=random_state,
         )
-
-        X_train = np.clip(np.round(X_train), 0, 255).astype(np.uint8)
+        # apply_oversampling preserves the float32 [0, 1] range; interpolating
+        # two values in [0, 1] stays in [0, 1], so no clipping is needed.
+        X_train = X_train.astype(np.float32)
 
         print(f"After SMOTE: training set has {len(X_train)} images.")
 

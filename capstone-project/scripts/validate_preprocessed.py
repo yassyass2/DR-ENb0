@@ -29,7 +29,7 @@ DATA_DIR = Path("data/preprocessed")
 SAMPLES_DIR = DATA_DIR / "_samples"
 SPLITS = ["train", "val", "test"]
 EXPECTED_SHAPE = (224, 224, 3)
-EXPECTED_DTYPE = np.uint8
+EXPECTED_DTYPE = np.float32  # pipeline normalises pixels to [0, 1]
 EXPECTED_CLASSES = {0, 1, 2, 3, 4}  # APTOS-2019 diagnosis labels
 
 
@@ -68,7 +68,7 @@ def check_split(split: str, X: np.ndarray, y: np.ndarray, report: Report) -> Non
 
     if X.dtype != EXPECTED_DTYPE:
         report.fail(f"X_{split} dtype {X.dtype} != {EXPECTED_DTYPE} "
-                    f"(EfficientNet-B0 expects uint8 [0,255] before preprocess_input)")
+                    f"(pipeline normalises to float32 [0,1])")
     else:
         report.ok(f"X_{split} dtype {X.dtype}")
 
@@ -81,17 +81,17 @@ def check_split(split: str, X: np.ndarray, y: np.ndarray, report: Report) -> Non
         return
     report.ok(f"{split}: {X.shape[0]} samples, X/y aligned")
 
-    # Value range
-    x_min, x_max = int(X.min()), int(X.max())
-    if x_min < 0 or x_max > 255:
-        report.fail(f"X_{split} values out of [0,255]: [{x_min},{x_max}]")
-    elif x_max <= 1:
-        report.warn(f"X_{split} max={x_max} -- looks already-normalised, "
-                    f"but the pipeline saves uint8 [0,255]")
+    # Value range -- the pipeline normalises pixels to [0, 1]
+    x_min, x_max = float(X.min()), float(X.max())
+    if x_min < 0.0 or x_max > 1.0:
+        report.fail(f"X_{split} values out of [0,1]: [{x_min:.3f},{x_max:.3f}] "
+                    f"-- the pipeline should normalise pixels to [0,1]")
+    elif x_max == 0.0:
+        report.warn(f"X_{split} is entirely zero -- images look blank")
     else:
-        report.ok(f"X_{split} value range [{x_min},{x_max}]")
+        report.ok(f"X_{split} value range [{x_min:.3f},{x_max:.3f}]")
 
-    # No NaN/Inf (uint8 can't carry them, but cast defensively in case dtype is wrong)
+    # No NaN/Inf -- the normalised float arrays can carry them if a bug slips in
     if X.dtype.kind == "f" and not np.isfinite(X).all():
         report.fail(f"X_{split} contains NaN or Inf")
 
@@ -124,6 +124,8 @@ def save_samples(split: str, X: np.ndarray, y: np.ndarray, n: int = 6) -> Path:
     rng = np.random.default_rng(0)
     idx = rng.choice(len(X), size=min(n, len(X)), replace=False)
     grid = np.concatenate([X[i] for i in idx], axis=1)  # side-by-side strip
+    # X is float32 in [0, 1]; scale back to 8-bit for PNG export.
+    grid = (np.clip(grid, 0.0, 1.0) * 255).round().astype(np.uint8)
     out = SAMPLES_DIR / f"{split}_samples.png"
     cv2.imwrite(str(out), grid)
     labels = [int(y[i]) for i in idx]

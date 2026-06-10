@@ -2,7 +2,8 @@ import cv2
 import numpy as np
 from imblearn.over_sampling import SMOTE
 
-DEFAULT_IMAGE_SIZE = 224  # For EfficientNet-B0
+DEFAULT_IMAGE_SIZE = 224  # EfficientNet-B0 input resolution; shared source of
+#                           truth, imported by src/pre_proc_pipeline.py.
 
 
 def crop_black_border(image: np.ndarray, threshold: int = 20) -> np.ndarray:
@@ -95,7 +96,8 @@ def apply_oversampling(
     values through integer wraparound.
 
     Returns:
-        X_resampled: uint8 image array, shape (N, H, W, C)
+        X_resampled: image array with the same dtype as ``X_train``,
+            shape (N, H, W, C)
         y_resampled: label array
     """
     n, h, w, c = X_train.shape
@@ -125,7 +127,15 @@ def apply_oversampling(
     X_resampled_flat, y_resampled = smote.fit_resample(X_flat, y_train)
 
     X_resampled = X_resampled_flat.reshape(-1, h, w, c)
-    X_resampled = np.clip(np.round(X_resampled), 0, 255).astype(np.uint8)
+
+    # Restore the caller's dtype. SMOTE interpolates between existing samples,
+    # so values stay within the original range; integer inputs (uint8 [0,255])
+    # are rounded and clipped, while float inputs (e.g. normalised [0,1]) are
+    # kept as-is -- clipping them to [0,255].astype(uint8) would zero them out.
+    if np.issubdtype(X_train.dtype, np.integer):
+        X_resampled = np.clip(np.round(X_resampled), 0, 255).astype(X_train.dtype)
+    else:
+        X_resampled = X_resampled.astype(X_train.dtype)
 
     y_resampled = y_resampled.astype(y_train.dtype)
 
