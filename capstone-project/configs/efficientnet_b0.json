@@ -11,12 +11,18 @@
   "model": {
     "name": "efficientnet_b0",
     "weights": "imagenet",
-    "dropout": 0.3
+    "dropout": 0.3,
+    "fine_tune_at": null
   },
   "training": {
     "batch_size": 16,
     "epochs": 10,
+    "warmup_epochs": 3,
+    "fine_tune_epochs": 15,
     "learning_rate": 0.0001,
+    "fine_tune_learning_rate": 0.00001,
+    "early_stopping_patience": 5,
+    "augment": true,
     "seed": 42
   }
 }
