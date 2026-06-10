@@ -153,7 +153,7 @@ def main() -> int:
     for split, (X, y) in loaded.items():
         save_samples(split, X, y)
     print(f"  open {SAMPLES_DIR} and check the retinas look reasonable "
-          f"(cropped, green-tinted, contrast-enhanced).")
+          f"(resized, contrast-enhanced, denoised).")
 
     print("\n=== SUMMARY ===")
     if report.failures:
