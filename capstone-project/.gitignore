@@ -16,6 +16,10 @@ data/raw/**
 models/checkpoints/
 models/saved_models/
 wandb/
+mlruns/
+mlartifacts/
+mlflow.db
+mlflow.db-*
 
 # Training outputs
 logs/

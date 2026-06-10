@@ -1,0 +1,22 @@
+{
+  "experiment": {
+    "name": "aptos-dr-classification",
+    "run_name": "efficientnet-b0-baseline"
+  },
+  "data": {
+    "preprocessed_dir": "data/preprocessed",
+    "image_size": 224,
+    "num_classes": 5
+  },
+  "model": {
+    "name": "efficientnet_b0",
+    "weights": "imagenet",
+    "dropout": 0.3
+  },
+  "training": {
+    "batch_size": 16,
+    "epochs": 10,
+    "learning_rate": 0.0001,
+    "seed": 42
+  }
+}
