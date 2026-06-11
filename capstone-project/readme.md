@@ -42,10 +42,10 @@ Training code lives under `src`:
 
 ```text
 src/data.py       Load and summarize preprocessed arrays.
-src/model.py      Placeholder for the model architecture.
+src/model.py      EfficientNet-B0 model + two-phase training loop (core logic).
 src/tracking.py   Configure MLflow and load training config.
-src/train.py      Small MLflow template for logging dataset/config metadata.
-src/evaluate.py   Placeholder for the final evaluation code.
+src/train.py      Training entry point (CLI wrapper around src/model.py).
+src/evaluate.py   QWK, per-class sensitivity/specificity and ROC-AUC metrics.
 ```
 
 The default training config is:
@@ -60,9 +60,15 @@ Run training from the repository root:
 python capstone-project/src/train.py
 ```
 
-For now this only starts an MLflow run and logs config + dataset metadata. The
-actual model, training loop, callbacks, and metrics should be added when the
-training experiments start.
+This runs the full pipeline: load the preprocessed arrays, build EfficientNet-B0
+(frozen ImageNet backbone + a small custom head), warm up the head, then unfreeze
+and fine-tune the backbone with QWK-monitored checkpointing, early stopping and
+LR reduction, and finally evaluate on the held-out test split. Outputs are written
+to `artifacts/` (`best_model.keras`, `final_model.keras`, `test_report.json`) and,
+if MLflow is installed, logged to the tracking store.
+
+`src/train.py` and `src/model.py` are equivalent entry points; both accept
+`--config` to point at a different config file.
 
 By default MLflow uses a local SQLite tracking store at `capstone-project/mlflow.db` and stores artifacts in `capstone-project/mlartifacts`. To use a shared tracking server, set `MLFLOW_TRACKING_URI` before running training.
 

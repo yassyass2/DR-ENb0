@@ -102,7 +102,7 @@ def build_augmentation(seed: int) -> keras.Sequential:
 def build_model(
     num_classes: int = 5,
     image_size: int = 224,
-    dropout: float = 0.3,
+    dropout: float = 0.5,
     weights: str | None = "imagenet",
     augment: bool = True,
     seed: int = 42,
@@ -119,6 +119,8 @@ def build_model(
         -> EfficientNetB0(top-less, ImageNet)
         -> GlobalAveragePooling2D
         -> BatchNormalization
+        -> Dropout
+        -> Dense(1024, relu)
         -> Dropout
         -> Dense(num_classes, softmax)
 
@@ -152,6 +154,8 @@ def build_model(
     x = layers.GlobalAveragePooling2D(name="avg_pool")(x)
     x = layers.BatchNormalization(name="head_bn")(x)
     x = layers.Dropout(dropout, name="head_dropout")(x)
+    x = layers.Dense(1024, activation="relu", name="head_dense")(x)
+    x = layers.Dropout(dropout, name="head_dropout_2")(x)
     outputs = layers.Dense(num_classes, activation="softmax", name="predictions")(x)
 
     model = keras.Model(inputs, outputs, name="efficientnet_b0_dr")
@@ -418,7 +422,7 @@ def run_training(config: dict[str, Any]) -> dict[str, Any]:
         model, base_model = build_model(
             num_classes=num_classes,
             image_size=image_size,
-            dropout=float(model_cfg.get("dropout", 0.3)),
+            dropout=float(model_cfg.get("dropout", 0.5)),
             weights=model_cfg.get("weights", "imagenet"),
             augment=bool(training_cfg.get("augment", True)),
             seed=seed,

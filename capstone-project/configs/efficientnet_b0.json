@@ -11,7 +11,7 @@
   "model": {
     "name": "efficientnet_b0",
     "weights": "imagenet",
-    "dropout": 0.3,
+    "dropout": 0.5,
     "fine_tune_at": null
   },
   "training": {
