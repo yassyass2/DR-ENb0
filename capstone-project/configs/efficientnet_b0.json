@@ -18,13 +18,16 @@
   },
   "training": {
     "batch_size": 16,
-    "epochs": 10,
-    "warmup_epochs": 3,
-    "fine_tune_epochs": 15,
-    "learning_rate": 0.0001,
+    "epochs": 30,
+    "warmup_epochs": 0,
+    "fine_tune_epochs": 30,
+    "learning_rate": 0.001,
     "fine_tune_learning_rate": 0.00001,
-    "early_stopping_patience": 5,
+    "early_stopping_patience": 8,
     "augment": true,
-    "seed": 42
+    "seed": 42,
+    "class_weight": "balanced",
+    "checkpoint_monitor": "val_qwk",
+    "checkpoint_mode": "max"
   }
 }

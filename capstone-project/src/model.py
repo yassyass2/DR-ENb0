@@ -30,10 +30,10 @@ then repeats the green channel into RGB: its external input contract stays
 ``[0, 255]`` three-channel tensor it expects. Feed the saved arrays in directly
 -- do NOT call ``efficientnet.preprocess_input`` (a no-op in Keras 3 anyway).
 
-Class imbalance is handled upstream: the training split is SMOTE-balanced by the
-preprocessing step, so no class weights are applied here. Validation and test
-keep their natural distribution, which is why QWK and per-class sensitivity /
-specificity (not plain accuracy) are used for model selection and reporting.
+Class imbalance is handled by optional class weights in the training config.
+Validation and test keep their natural distribution, which is why QWK and
+per-class sensitivity / specificity (not plain accuracy) are used for model
+selection and reporting.
 """
 
 from __future__ import annotations
@@ -199,6 +199,17 @@ def fine_tune(base_model: keras.Model, fine_tune_at: int | None = None) -> None:
             layer.trainable = False
 
 
+def balanced_class_weights(y_train: np.ndarray) -> dict[int, float]:
+    """Compute sklearn-style balanced class weights."""
+    labels, counts = np.unique(y_train, return_counts=True)
+    total = int(counts.sum())
+    n_classes = int(len(labels))
+    return {
+        int(label): float(total / (n_classes * count))
+        for label, count in zip(labels, counts, strict=True)
+    }
+
+
 # ---------------------------------------------------------------------------
 # Validation-QWK callback (used for checkpointing / early stopping)
 # ---------------------------------------------------------------------------
@@ -256,11 +267,18 @@ def train_model(
     fine_tune_epochs = int(training.get("fine_tune_epochs", training.get("epochs", 15)))
     fine_tune_lr = float(training.get("fine_tune_learning_rate", warmup_lr / 10.0))
     patience = int(training.get("early_stopping_patience", 5))
+    checkpoint_monitor = training.get("checkpoint_monitor", "val_qwk")
+    checkpoint_mode = training.get("checkpoint_mode", "max")
     fine_tune_at = model_cfg.get("fine_tune_at")
 
     x_train, y_train = dataset.X_train, dataset.y_train
     val_data = (dataset.X_val, dataset.y_val)
     qwk_callback = QWKCallback(dataset.X_val, dataset.y_val, batch_size=batch_size)
+    class_weight = (
+        balanced_class_weights(y_train)
+        if training.get("class_weight") == "balanced"
+        else None
+    )
 
     # -- Phase 1: warm up the head -----------------------------------------
     print(f"\n=== Phase 1: warm-up head ({warmup_epochs} epochs, lr={warmup_lr}) ===")
@@ -271,6 +289,7 @@ def train_model(
         validation_data=val_data,
         epochs=warmup_epochs,
         batch_size=batch_size,
+        class_weight=class_weight,
         callbacks=[qwk_callback],
         verbose=2,
     )
@@ -289,21 +308,21 @@ def train_model(
         qwk_callback,  # must be first: populates val_qwk for the others.
         keras.callbacks.ModelCheckpoint(
             str(checkpoint_path),
-            monitor="val_qwk",
-            mode="max",
+            monitor=checkpoint_monitor,
+            mode=checkpoint_mode,
             save_best_only=True,
             verbose=1,
         ),
         keras.callbacks.EarlyStopping(
-            monitor="val_qwk",
-            mode="max",
+            monitor=checkpoint_monitor,
+            mode=checkpoint_mode,
             patience=patience,
             restore_best_weights=True,
             verbose=1,
         ),
         keras.callbacks.ReduceLROnPlateau(
-            monitor="val_qwk",
-            mode="max",
+            monitor=checkpoint_monitor,
+            mode=checkpoint_mode,
             factor=0.5,
             patience=max(1, patience // 2),
             min_lr=1e-7,
@@ -319,6 +338,7 @@ def train_model(
         epochs=total_epochs,
         initial_epoch=warmup_epochs,
         batch_size=batch_size,
+        class_weight=class_weight,
         callbacks=callbacks,
         verbose=2,
     )

@@ -388,7 +388,7 @@ uv run python -m pytest capstone-project/tests -q
 
 Expected: all tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add capstone-project/src/preprocessing.py capstone-project/tests/test_preprocessing_contract.py
@@ -1045,7 +1045,7 @@ git commit -m "fix: make Grad-CAM match canonical model predictions"
 - Modify: `capstone-project/configs/efficientnet_b0.json`
 - Modify: `capstone-project/tests/test_training_structure.py`
 
-- [ ] **Step 1: Extend config test**
+- [x] **Step 1: Extend config test**
 
 In `capstone-project/tests/test_training_structure.py`, add:
 
@@ -1054,7 +1054,7 @@ self.assertEqual(config["training"]["checkpoint_monitor"], "val_qwk")
 self.assertEqual(config["training"]["checkpoint_mode"], "max")
 ```
 
-- [ ] **Step 2: Update config**
+- [x] **Step 2: Update config**
 
 Modify `capstone-project/configs/efficientnet_b0.json`:
 
@@ -1075,7 +1075,7 @@ Modify `capstone-project/configs/efficientnet_b0.json`:
 }
 ```
 
-- [ ] **Step 3: Use config monitor fields in callbacks**
+- [x] **Step 3: Use config monitor fields in callbacks**
 
 In `train_model`, add:
 
@@ -1091,7 +1091,7 @@ monitor=checkpoint_monitor,
 mode=checkpoint_mode,
 ```
 
-- [ ] **Step 4: Add class-weight helper**
+- [x] **Step 4: Add class-weight helper**
 
 Add:
 
@@ -1123,7 +1123,7 @@ Pass:
 class_weight=class_weight,
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -1133,7 +1133,7 @@ uv run python -m pytest capstone-project/tests -q
 
 Expected: all tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add capstone-project/src/model.py capstone-project/configs/efficientnet_b0.json capstone-project/tests/test_training_structure.py

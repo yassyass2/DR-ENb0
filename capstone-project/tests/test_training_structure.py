@@ -14,6 +14,7 @@ if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
 from src.data import DatasetSummary, load_preprocessed_data
+from src.model import balanced_class_weights
 from src.tracking import configure_mlflow, load_training_config
 
 
@@ -24,6 +25,8 @@ class TrainingStructureTests(unittest.TestCase):
         self.assertEqual(config["model"]["name"], "efficientnet_b0")
         self.assertEqual(config["data"]["preprocessed_dir"], "data/preprocessed")
         self.assertIn("run_name", config["experiment"])
+        self.assertEqual(config["training"]["checkpoint_monitor"], "val_qwk")
+        self.assertEqual(config["training"]["checkpoint_mode"], "max")
 
     def test_load_preprocessed_data_loads_all_splits_and_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -79,6 +82,12 @@ class TrainingStructureTests(unittest.TestCase):
                 os.environ["MLFLOW_TRACKING_URI"] = previous
 
         self.assertEqual(tracking_uri, f"sqlite:///{Path(tmp) / 'mlflow.db'}")
+
+    def test_balanced_class_weights_match_sklearn_formula(self) -> None:
+        weights = balanced_class_weights(np.array([0, 0, 0, 1], dtype=np.int64))
+
+        self.assertEqual(weights[0], 4 / (2 * 3))
+        self.assertEqual(weights[1], 4 / (2 * 1))
 
     def test_project_runtime_targets_tensorflow_compatible_python(self) -> None:
         with (PROJECT_DIR.parent / "pyproject.toml").open("rb") as handle:
