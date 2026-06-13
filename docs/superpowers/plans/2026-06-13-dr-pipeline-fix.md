@@ -1559,7 +1559,7 @@ Expected visual checks:
 - Results are either clearly marked pending or populated from generated artifacts.
 - Tables fit page width.
 
-- [ ] **Step 7: Commit paper alignment**
+- [x] **Step 7: Commit paper alignment**
 
 ```bash
 git add capstone-project/docs/preprocessing_methodology.tex capstone-project/readme.md
