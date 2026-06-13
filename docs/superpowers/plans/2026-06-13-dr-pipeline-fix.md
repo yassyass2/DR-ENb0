@@ -628,7 +628,7 @@ git commit -m "feat: add deterministic DR dataset splits"
 - Modify: `capstone-project/scripts/validate_preprocessed.py`
 - Modify: `capstone-project/tests/test_training_structure.py`
 
-- [ ] **Step 1: Extend data loader tests**
+- [x] **Step 1: Extend data loader tests**
 
 Modify `test_load_preprocessed_data_loads_all_splits_and_summary` in `capstone-project/tests/test_training_structure.py` so its fake arrays use one channel:
 
@@ -645,7 +645,7 @@ self.assertEqual(dataset.X_train.dtype, np.float32)
 self.assertEqual(dataset.summary.image_shape, (224, 224, 1))
 ```
 
-- [ ] **Step 2: Add array contract validation in `src/data.py`**
+- [x] **Step 2: Add array contract validation in `src/data.py`**
 
 Add this function:
 
@@ -673,7 +673,7 @@ _validate_image_contract(arrays["X_val"], "val")
 _validate_image_contract(arrays["X_test"], "test")
 ```
 
-- [ ] **Step 3: Update validator expected shape**
+- [x] **Step 3: Update validator expected shape**
 
 Modify `capstone-project/scripts/validate_preprocessed.py`:
 
@@ -691,7 +691,7 @@ out = SAMPLES_DIR / f"{split}_samples.png"
 cv2.imwrite(str(out), grid)
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run:
 
@@ -701,7 +701,7 @@ uv run python -m pytest capstone-project/tests -q
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add capstone-project/src/data.py capstone-project/scripts/validate_preprocessed.py capstone-project/tests/test_training_structure.py

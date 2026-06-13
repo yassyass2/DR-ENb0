@@ -28,7 +28,7 @@ import numpy as np
 DATA_DIR = Path("data/preprocessed")
 SAMPLES_DIR = DATA_DIR / "_samples"
 SPLITS = ["train", "val", "test"]
-EXPECTED_SHAPE = (224, 224, 3)
+EXPECTED_SHAPE = (224, 224, 1)
 EXPECTED_DTYPE = np.float32  # pipeline normalises pixels to [0, 1]
 EXPECTED_CLASSES = {0, 1, 2, 3, 4}  # APTOS-2019 diagnosis labels
 
@@ -123,7 +123,7 @@ def save_samples(split: str, X: np.ndarray, y: np.ndarray, n: int = 6) -> Path:
     SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(0)
     idx = rng.choice(len(X), size=min(n, len(X)), replace=False)
-    grid = np.concatenate([X[i] for i in idx], axis=1)  # side-by-side strip
+    grid = np.concatenate([X[i].squeeze(axis=-1) for i in idx], axis=1)
     # X is float32 in [0, 1]; scale back to 8-bit for PNG export.
     grid = (np.clip(grid, 0.0, 1.0) * 255).round().astype(np.uint8)
     out = SAMPLES_DIR / f"{split}_samples.png"

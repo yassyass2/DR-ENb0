@@ -43,6 +43,9 @@ def load_preprocessed_data(data_dir: str | Path) -> PreprocessedDataset:
     _validate_alignment(arrays["X_train"], arrays["y_train"], "train")
     _validate_alignment(arrays["X_val"], arrays["y_val"], "val")
     _validate_alignment(arrays["X_test"], arrays["y_test"], "test")
+    _validate_image_contract(arrays["X_train"], "train")
+    _validate_image_contract(arrays["X_val"], "val")
+    _validate_image_contract(arrays["X_test"], "test")
 
     summary = DatasetSummary(
         train_samples=int(arrays["X_train"].shape[0]),
@@ -72,6 +75,23 @@ def _validate_alignment(X: np.ndarray, y: np.ndarray, split: str) -> None:
             f"{split} split is misaligned: X has {X.shape[0]} samples, "
             f"y has {y.shape[0]} labels"
         )
+
+
+def _validate_image_contract(X: np.ndarray, split: str) -> None:
+    if X.ndim != 4:
+        raise ValueError(f"{split} images must be rank-4, got shape {X.shape}")
+    if X.shape[1:] != (224, 224, 1):
+        raise ValueError(
+            f"{split} images must have shape (N, 224, 224, 1), got {X.shape}"
+        )
+    if X.dtype != np.float32:
+        raise ValueError(f"{split} images must be float32, got {X.dtype}")
+    if not np.isfinite(X).all():
+        raise ValueError(f"{split} images contain NaN or Inf")
+    x_min = float(X.min())
+    x_max = float(X.max())
+    if x_min < 0.0 or x_max > 1.0:
+        raise ValueError(f"{split} images must be in [0, 1], got [{x_min}, {x_max}]")
 
 
 def _class_distribution(y: np.ndarray) -> dict[int, int]:

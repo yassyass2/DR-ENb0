@@ -29,11 +29,11 @@ class TrainingStructureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp)
             arrays = {
-                "X_train": np.zeros((2, 224, 224, 3), dtype=np.uint8),
+                "X_train": np.zeros((2, 224, 224, 1), dtype=np.float32),
                 "y_train": np.array([0, 1], dtype=np.int64),
-                "X_val": np.ones((1, 224, 224, 3), dtype=np.uint8),
+                "X_val": np.ones((1, 224, 224, 1), dtype=np.float32),
                 "y_val": np.array([1], dtype=np.int64),
-                "X_test": np.full((1, 224, 224, 3), 2, dtype=np.uint8),
+                "X_test": np.full((1, 224, 224, 1), 0.5, dtype=np.float32),
                 "y_test": np.array([0], dtype=np.int64),
             }
             for name, value in arrays.items():
@@ -41,11 +41,30 @@ class TrainingStructureTests(unittest.TestCase):
 
             dataset = load_preprocessed_data(data_dir)
 
-        self.assertEqual(dataset.X_train.shape, (2, 224, 224, 3))
+        self.assertEqual(dataset.X_train.shape, (2, 224, 224, 1))
+        self.assertEqual(dataset.X_train.dtype, np.float32)
         self.assertEqual(dataset.y_val.tolist(), [1])
         self.assertIsInstance(dataset.summary, DatasetSummary)
         self.assertEqual(dataset.summary.train_samples, 2)
+        self.assertEqual(dataset.summary.image_shape, (224, 224, 1))
         self.assertEqual(dataset.summary.class_distribution["train"], {0: 1, 1: 1})
+
+    def test_load_preprocessed_data_rejects_noncanonical_image_arrays(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            arrays = {
+                "X_train": np.zeros((2, 224, 224, 3), dtype=np.uint8),
+                "y_train": np.array([0, 1], dtype=np.int64),
+                "X_val": np.ones((1, 224, 224, 1), dtype=np.float32),
+                "y_val": np.array([1], dtype=np.int64),
+                "X_test": np.full((1, 224, 224, 1), 0.5, dtype=np.float32),
+                "y_test": np.array([0], dtype=np.int64),
+            }
+            for name, value in arrays.items():
+                np.save(data_dir / f"{name}.npy", value)
+
+            with self.assertRaisesRegex(ValueError, "train images must have shape"):
+                load_preprocessed_data(data_dir)
 
     def test_configure_mlflow_uses_local_default_tracking_uri(self) -> None:
         previous = os.environ.pop("MLFLOW_TRACKING_URI", None)
