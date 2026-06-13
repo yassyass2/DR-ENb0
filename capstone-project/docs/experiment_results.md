@@ -33,3 +33,17 @@ recall improves, while grade 4 recall is unchanged.
 The selected report result should therefore remain the class-weighted baseline.
 SMOTE should be reported as an imbalance-handling ablation that did not improve
 minority-grade sensitivity overall.
+
+## Explainability Comparison
+
+The trained baseline model now has qualitative outputs for three XAI methods:
+
+| Method | Artifact pattern | Notes |
+| --- | --- | --- |
+| Grad-CAM | `artifacts/figures/gradcam_*.png` | Original baseline XAI method; useful but sometimes attends to optic disc or border regions. |
+| Grad-CAM++ | `artifacts/figures/gradcampp_*.png` | Uses stronger spatial weighting and often produces sharper heatmaps than Grad-CAM. |
+| Score-CAM top-k | `artifacts/figures/scorecam_*.png` | Computed on a limited sample set using the top 32 activation channels per image to avoid 1280 masked forward passes per image. Outputs are broader and more diffuse. |
+
+These artifacts support the proposal's qualitative XAI comparison. They do not
+constitute lesion-mask validation: no IDRiD masks, pointing-game accuracy, or
+IoU scores are used in the current scope.

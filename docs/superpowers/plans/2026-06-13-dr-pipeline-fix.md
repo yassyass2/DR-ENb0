@@ -24,7 +24,7 @@ The canonical v1 scope is:
 - First training baseline: EfficientNetB0 frozen backbone, class weights, standard augmentation, validation QWK checkpointing.
 - SMOTE: separate experiment after baseline; never mixed into the baseline by default.
 - MSAG: separate optional experiment after baseline and SMOTE are stable.
-- Explainability: Grad-CAM only for v1. No Grad-CAM++, Score-CAM, IDRiD masks, pointing-game accuracy, IoU, EyePACS, or Messidor-2 until implemented.
+- Explainability: Grad-CAM, Grad-CAM++, and limited top-k Score-CAM for qualitative comparison. No IDRiD masks, pointing-game accuracy, IoU, EyePACS, or Messidor-2 until implemented.
 - Paper alignment: paper must describe exactly this pipeline until additional experiments exist.
 
 ## File Structure Map
@@ -107,7 +107,7 @@ The current goal is to fix and stabilize the technical pipeline before final pap
 - EfficientNetB0 baseline.
 - Class-weighted baseline training.
 - Optional SMOTE experiment after baseline.
-- Grad-CAM only for explainability.
+- Grad-CAM, Grad-CAM++, and limited top-k Score-CAM for qualitative explainability.
 - QWK, accuracy, per-class sensitivity/specificity, macro AUC, confusion matrix.
 
 ## Excluded Until Implemented
@@ -115,8 +115,6 @@ The current goal is to fix and stabilize the technical pipeline before final pap
 - EyePACS.
 - Messidor-2.
 - IDRiD lesion masks.
-- Grad-CAM++.
-- Score-CAM.
 - Pointing-game accuracy.
 - IoU against lesion masks.
 

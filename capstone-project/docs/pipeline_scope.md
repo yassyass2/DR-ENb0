@@ -18,7 +18,10 @@ The current goal is to fix and stabilize the technical pipeline before final pap
 - EfficientNetB0 baseline.
 - Class-weighted baseline training.
 - Optional SMOTE experiment after baseline.
-- Grad-CAM only for explainability.
+- Qualitative XAI comparison:
+  - Grad-CAM
+  - Grad-CAM++
+  - top-k Score-CAM for a limited sample set
 - QWK, accuracy, per-class sensitivity/specificity, macro AUC, confusion matrix.
 
 ## Excluded Until Implemented
@@ -26,8 +29,6 @@ The current goal is to fix and stabilize the technical pipeline before final pap
 - EyePACS.
 - Messidor-2.
 - IDRiD lesion masks.
-- Grad-CAM++.
-- Score-CAM.
 - Pointing-game accuracy.
 - IoU against lesion masks.
 

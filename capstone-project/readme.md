@@ -138,7 +138,27 @@ uv run python capstone-project/src/gradcam.py \
   --samples-per-grade 6
 ```
 
-Grad-CAM is qualitative in the current scope. The implementation validates that
-the Grad-CAM model predictions match the original model predictions before
-heatmaps are generated, but the current project does not claim lesion-mask
-overlap metrics.
+Generate Grad-CAM++ and limited top-k Score-CAM figures:
+
+```bash
+uv run python capstone-project/src/gradcam.py \
+  --model capstone-project/artifacts/best_model.keras \
+  --data-dir capstone-project/data/preprocessed \
+  --out-dir capstone-project/artifacts/figures \
+  --method gradcampp \
+  --samples-per-grade 6
+
+uv run python capstone-project/src/gradcam.py \
+  --model capstone-project/artifacts/best_model.keras \
+  --data-dir capstone-project/data/preprocessed \
+  --out-dir capstone-project/artifacts/figures \
+  --method scorecam \
+  --samples-per-grade 2 \
+  --scorecam-max-channels 32
+```
+
+XAI is qualitative in the current scope. The implementation validates that the
+Grad-CAM model predictions match the original model predictions before heatmaps
+are generated. Score-CAM is limited to the top activated channels to keep the
+runtime practical. The current project does not claim lesion-mask overlap
+metrics.

@@ -154,14 +154,17 @@ sensitivity (\(0.5997\)), mainly because grade 1 sensitivity dropped to
 \section{Explainability}
 \label{sec:explainability}
 
-Grad-CAM is generated from the trained EfficientNetB0 model by exposing the
-final convolutional activation and replaying the exact classifier head. The
-implementation is validated by checking that Grad-CAM model predictions match
-the original model predictions before heatmaps are generated.
+Grad-CAM, Grad-CAM++, and a limited top-k Score-CAM variant are generated from
+the trained EfficientNetB0 model. The implementation exposes the final
+convolutional activation and replays the exact classifier head. The Grad-CAM
+model path is validated by checking that its predictions match the original
+model predictions before heatmaps are generated.
 
 The current explainability output should be interpreted as qualitative visual
-evidence only. Several heatmaps highlight retinal structures plausibly related
-to disease severity, but some also focus on the optic disc or image borders.
+evidence only. Grad-CAM++ produces sharper maps than Grad-CAM on several
+examples, while the top-k Score-CAM outputs are broader and more diffuse. Some
+heatmaps highlight retinal structures plausibly related to disease severity,
+but others focus on the optic disc, image borders, or wide retinal regions.
 Those cases are treated as failure-mode evidence and should not be presented as
 quantitative lesion-level validation.
 
@@ -178,6 +181,8 @@ All generated artifacts for the current baseline are stored under the project
   \item \texttt{figures/training\_curves.png}: loss, accuracy, and validation QWK curves.
   \item \texttt{figures/gradcam\_summary.png}: one Grad-CAM example per grade.
   \item \texttt{figures/gradcam\_grade\_0.png} through \texttt{gradcam\_grade\_4.png}: per-grade Grad-CAM grids.
+  \item \texttt{figures/gradcampp\_summary.png}: one Grad-CAM++ example per grade.
+  \item \texttt{figures/scorecam\_summary.png}: one limited top-k Score-CAM example per grade.
 \end{itemize}
 
 \begin{thebibliography}{9}
