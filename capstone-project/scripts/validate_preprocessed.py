@@ -19,15 +19,15 @@ Exits with status 0 if all checks pass, 1 otherwise.
 
 from __future__ import annotations
 
-import sys
+import argparse
 import json
+import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
 
-DATA_DIR = Path("data/preprocessed")
-SAMPLES_DIR = DATA_DIR / "_samples"
+DEFAULT_DATA_DIR = Path("data/preprocessed")
 SPLITS = ["train", "val", "test"]
 EXPECTED_SHAPE = (224, 224, 1)
 EXPECTED_DTYPE = np.float32  # pipeline normalises pixels to [0, 1]
@@ -51,17 +51,27 @@ class Report:
         print(f"  [ OK ] {msg}")
 
 
-def load_split(split: str, report: Report) -> tuple[np.ndarray, np.ndarray] | None:
-    x_path = DATA_DIR / f"X_{split}.npy"
-    y_path = DATA_DIR / f"y_{split}.npy"
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Validate preprocessed DR arrays.")
+    parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
+    return parser.parse_args()
+
+
+def load_split(
+    data_dir: Path,
+    split: str,
+    report: Report,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    x_path = data_dir / f"X_{split}.npy"
+    y_path = data_dir / f"y_{split}.npy"
     if not x_path.exists() or not y_path.exists():
         report.fail(f"missing {x_path.name} or {y_path.name}")
         return None
     return np.load(x_path), np.load(y_path)
 
 
-def load_smote_flag(report: Report) -> bool:
-    metadata_path = DATA_DIR / "splits" / "metadata.json"
+def load_smote_flag(data_dir: Path, report: Report) -> bool:
+    metadata_path = data_dir / "splits" / "metadata.json"
     if not metadata_path.exists():
         report.warn(f"missing {metadata_path}; assuming baseline without SMOTE")
         return False
@@ -140,14 +150,21 @@ def check_split(
                         f"DR split. SMOTE may have leaked into {split}.")
 
 
-def save_samples(split: str, X: np.ndarray, y: np.ndarray, n: int = 6) -> Path:
-    SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
+def save_samples(
+    data_dir: Path,
+    split: str,
+    X: np.ndarray,
+    y: np.ndarray,
+    n: int = 6,
+) -> Path:
+    samples_dir = data_dir / "_samples"
+    samples_dir.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(0)
     idx = rng.choice(len(X), size=min(n, len(X)), replace=False)
     grid = np.concatenate([X[i].squeeze(axis=-1) for i in idx], axis=1)
     # X is float32 in [0, 1]; scale back to 8-bit for PNG export.
     grid = (np.clip(grid, 0.0, 1.0) * 255).round().astype(np.uint8)
-    out = SAMPLES_DIR / f"{split}_samples.png"
+    out = samples_dir / f"{split}_samples.png"
     cv2.imwrite(str(out), grid)
     labels = [int(y[i]) for i in idx]
     print(f"  wrote {out}  (labels left->right: {labels})")
@@ -155,17 +172,20 @@ def save_samples(split: str, X: np.ndarray, y: np.ndarray, n: int = 6) -> Path:
 
 
 def main() -> int:
-    if not DATA_DIR.exists():
-        print(f"[FAIL] {DATA_DIR} does not exist. Run main.py first.")
+    args = parse_args()
+    data_dir = args.data_dir
+
+    if not data_dir.exists():
+        print(f"[FAIL] {data_dir} does not exist. Run main.py first.")
         return 1
 
     report = Report()
-    smote_train = load_smote_flag(report)
+    smote_train = load_smote_flag(data_dir, report)
     loaded: dict[str, tuple[np.ndarray, np.ndarray]] = {}
 
     for split in SPLITS:
         print(f"\n=== {split.upper()} ===")
-        data = load_split(split, report)
+        data = load_split(data_dir, split, report)
         if data is None:
             continue
         loaded[split] = data
@@ -173,8 +193,8 @@ def main() -> int:
 
     print("\n=== SAMPLES ===")
     for split, (X, y) in loaded.items():
-        save_samples(split, X, y)
-    print(f"  open {SAMPLES_DIR} and check the retinas look reasonable "
+        save_samples(data_dir, split, X, y)
+    print(f"  open {data_dir / '_samples'} and check the retinas look reasonable "
           f"(resized, contrast-enhanced, denoised).")
 
     print("\n=== SUMMARY ===")

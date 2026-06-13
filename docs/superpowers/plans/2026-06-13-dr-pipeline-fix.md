@@ -1285,7 +1285,7 @@ git commit -m "feat: separate SMOTE preprocessing experiment"
 - Generated but not committed: `capstone-project/data/preprocessed/splits/*.csv`
 - Generated sample images: `capstone-project/data/preprocessed/_samples/*.png`
 
-- [ ] **Step 1: Generate baseline preprocessed arrays**
+- [x] **Step 1: Generate baseline preprocessed arrays**
 
 Run from `capstone-project`:
 
@@ -1304,7 +1304,7 @@ Saved X_test (..., 224, 224, 1) (float32)
 Saved y_test (...)
 ```
 
-- [ ] **Step 2: Validate baseline arrays**
+- [x] **Step 2: Validate baseline arrays**
 
 Run:
 
@@ -1314,7 +1314,7 @@ uv run python scripts/validate_preprocessed.py
 
 Expected: no failures. Warnings are acceptable only if they are manually understood and documented in the final implementation notes.
 
-- [ ] **Step 3: Generate SMOTE arrays**
+- [x] **Step 3: Generate SMOTE arrays**
 
 Run:
 
@@ -1324,7 +1324,7 @@ uv run python main.py --out-dir data/preprocessed_smote --smote-train
 
 Expected: train split balanced; val/test natural.
 
-- [ ] **Step 4: Validate SMOTE arrays**
+- [x] **Step 4: Validate SMOTE arrays**
 
 Run:
 
@@ -1338,7 +1338,7 @@ If `--data-dir` does not exist yet, first modify the validator to accept:
 parser.add_argument("--data-dir", type=Path, default=Path("data/preprocessed"))
 ```
 
-- [ ] **Step 5: Commit only validator changes and sample images if intentionally tracked**
+- [x] **Step 5: Commit only validator changes and sample images if intentionally tracked**
 
 Generated `.npy` files should stay ignored unless the team explicitly decides otherwise.
 
