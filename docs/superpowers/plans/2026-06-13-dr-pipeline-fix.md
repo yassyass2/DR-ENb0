@@ -1411,7 +1411,7 @@ capstone-project/artifacts/figures/per_class_metrics.png
 capstone-project/artifacts/figures/training_curves.png
 ```
 
-- [ ] **Step 4: Commit report and figures only after reviewing consistency**
+- [x] **Step 4: Commit report and figures only after reviewing consistency**
 
 ```bash
 git add capstone-project/artifacts/test_report.json capstone-project/artifacts/figures
@@ -1467,7 +1467,7 @@ Open the generated PNGs and check:
 - Correct and incorrect predictions are both distinguishable.
 - Captions show true/predicted grades.
 
-- [ ] **Step 4: Commit Grad-CAM artifacts**
+- [x] **Step 4: Commit Grad-CAM artifacts**
 
 ```bash
 git add capstone-project/src/gradcam.py capstone-project/artifacts/figures/gradcam_*.png
