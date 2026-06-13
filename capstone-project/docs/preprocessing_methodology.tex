@@ -147,7 +147,9 @@ Table~\ref{tab:test-results}.
 
 The main weakness is minority-grade recall. Sensitivity is strongest for grade
 0 (\(0.9598\)) and lower for grade 1 (\(0.5333\)) and grade 4 (\(0.4545\)).
-This is why the SMOTE experiment remains useful as a controlled follow-up.
+A separate SMOTE ablation reached similar QWK (\(0.8629\)) but lower macro
+sensitivity (\(0.5997\)), mainly because grade 1 sensitivity dropped to
+\(0.2667\). The class-weighted baseline therefore remains the selected result.
 
 \section{Explainability}
 \label{sec:explainability}

@@ -44,6 +44,9 @@ uv run python main.py --out-dir data/preprocessed_smote --smote-train
 uv run python src/train.py --config configs/efficientnet_b0_smote.json
 ```
 
+SMOTE training writes to `artifacts/smote/` so it does not overwrite the
+canonical baseline artifacts in `artifacts/`.
+
 ## Training structure
 
 Training code lives under `src`:
@@ -109,8 +112,9 @@ Macro ROC-AUC       0.9204
 ```
 
 The weakest recalls are grade 1 mild (`0.5333`) and grade 4 proliferative
-(`0.4545`), so SMOTE remains a separate follow-up experiment rather than part
-of the default baseline.
+(`0.4545`). A separate SMOTE ablation reached similar QWK (`0.8629`) but lower
+macro sensitivity (`0.5997`) because grade 1 recall dropped to `0.2667`.
+Therefore the class-weighted baseline remains the selected result.
 
 ## Evaluation and Grad-CAM artifacts
 
