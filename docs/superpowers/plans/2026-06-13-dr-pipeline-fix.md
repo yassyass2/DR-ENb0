@@ -717,7 +717,7 @@ git commit -m "test: enforce preprocessed array contract"
 - Create: `capstone-project/tests/test_model_contract.py`
 - Modify: `capstone-project/configs/efficientnet_b0.json`
 
-- [ ] **Step 1: Write model contract tests**
+- [x] **Step 1: Write model contract tests**
 
 Create `capstone-project/tests/test_model_contract.py`:
 
@@ -763,7 +763,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run model contract test to verify failure**
+- [x] **Step 2: Run model contract test to verify failure**
 
 Run:
 
@@ -773,7 +773,7 @@ uv run python -m pytest capstone-project/tests/test_model_contract.py -q
 
 Expected: failure because current model expects three channels.
 
-- [ ] **Step 3: Modify `build_model` to accept one-channel input**
+- [x] **Step 3: Modify `build_model` to accept one-channel input**
 
 In `capstone-project/src/model.py`, change the input shape:
 
@@ -801,7 +801,7 @@ Keep EfficientNetB0 as:
 input_shape=(image_size, image_size, 3)
 ```
 
-- [ ] **Step 4: Update config**
+- [x] **Step 4: Update config**
 
 Modify `capstone-project/configs/efficientnet_b0.json`:
 
@@ -821,7 +821,7 @@ Set baseline dropout to match team experiment baseline unless intentionally chan
 "dropout": 0.3
 ```
 
-- [ ] **Step 5: Run model test**
+- [x] **Step 5: Run model test**
 
 Run:
 
@@ -831,7 +831,7 @@ uv run python -m pytest capstone-project/tests/test_model_contract.py -q
 
 Expected: pass.
 
-- [ ] **Step 6: Run all tests**
+- [x] **Step 6: Run all tests**
 
 Run:
 
@@ -841,7 +841,7 @@ uv run python -m pytest capstone-project/tests -q
 
 Expected: all tests pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add capstone-project/src/model.py capstone-project/configs/efficientnet_b0.json capstone-project/tests/test_model_contract.py

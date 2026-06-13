@@ -20,14 +20,15 @@ What it does, start to finish:
 
 Input contract (IMPORTANT)
 --------------------------
-The preprocessing pipeline saves images as ``float32`` already normalised to
-``[0, 1]``. Keras 3's ``EfficientNetB0`` ships a *baked-in* ``Rescaling(1/255)``
-layer (it cannot be disabled), so the backbone expects pixels in ``[0, 255]``
-and divides by 255 internally. To avoid dividing by 255 twice, the model starts
-with a ``Rescaling(255.0)`` layer: its external input contract stays ``[0, 1]``
-(matching the saved arrays), while the backbone still receives the ``[0, 255]``
-it expects. Feed the saved arrays in directly -- do NOT call
-``efficientnet.preprocess_input`` (a no-op in Keras 3 anyway).
+The preprocessing pipeline saves one-channel green images as ``float32`` already
+normalised to ``[0, 1]``. Keras 3's ``EfficientNetB0`` ships a *baked-in*
+``Rescaling(1/255)`` layer (it cannot be disabled), so the backbone expects
+three-channel pixels in ``[0, 255]`` and divides by 255 internally. To avoid
+dividing by 255 twice, the model starts with a ``Rescaling(255.0)`` layer and
+then repeats the green channel into RGB: its external input contract stays
+``[0, 1]`` (matching the saved arrays), while the backbone still receives the
+``[0, 255]`` three-channel tensor it expects. Feed the saved arrays in directly
+-- do NOT call ``efficientnet.preprocess_input`` (a no-op in Keras 3 anyway).
 
 Class imbalance is handled upstream: the training split is SMOTE-balanced by the
 preprocessing step, so no class weights are applied here. Validation and test
@@ -112,10 +113,11 @@ def build_model(
 
     Architecture::
 
-        Input([0, 1])            # saved arrays are float32 in [0, 1]
-        -> data augmentation     # train-only
+        Input([0, 1], 1 channel) # saved arrays are green float32 in [0, 1]
         -> Rescaling(255.0)      # undo [0,1] so the backbone's baked-in
                                  #   Rescaling(1/255) lands back on [0, 1]
+        -> repeat green to RGB   # EfficientNetB0 keeps 3-channel ImageNet input
+        -> data augmentation     # train-only
         -> EfficientNetB0(top-less, ImageNet)
         -> GlobalAveragePooling2D
         -> BatchNormalization
@@ -129,15 +131,17 @@ def build_model(
 
     Returns ``(model, base_model)``.
     """
-    inputs = keras.Input(shape=(image_size, image_size, 3), name="image")
+    inputs = keras.Input(shape=(image_size, image_size, 1), name="green_image")
 
     x = inputs
-    if augment:
-        x = build_augmentation(seed)(x)
 
     # See the module docstring: our data is [0, 1] but the Keras 3 backbone
     # has a non-removable Rescaling(1/255), so scale back up to [0, 255] here.
     x = layers.Rescaling(255.0, name="to_efficientnet_range")(x)
+    x = layers.Concatenate(axis=-1, name="repeat_green_to_rgb")([x, x, x])
+
+    if augment:
+        x = build_augmentation(seed)(x)
 
     base_model = keras.applications.EfficientNetB0(
         include_top=False,

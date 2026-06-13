@@ -6,12 +6,14 @@
   "data": {
     "preprocessed_dir": "data/preprocessed",
     "image_size": 224,
-    "num_classes": 5
+    "num_classes": 5,
+    "channels": 1,
+    "value_range": "[0,1]"
   },
   "model": {
     "name": "efficientnet_b0",
     "weights": "imagenet",
-    "dropout": 0.5,
+    "dropout": 0.3,
     "fine_tune_at": null
   },
   "training": {
