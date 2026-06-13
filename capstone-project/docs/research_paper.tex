@@ -12,7 +12,7 @@
 \usepackage{subcaption}
 \usepackage{xcolor}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,fit}
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
 \usepackage[hidelinks]{hyperref}
 
 \sisetup{detect-weight=true, detect-family=true}
@@ -81,41 +81,46 @@ all experiments.
   \resizebox{\textwidth}{!}{%
   \begin{tikzpicture}[
     font=\small,
-    node distance=8mm and 8mm,
-    stage/.style={draw, rounded corners, align=center, minimum width=34mm, minimum height=10mm, fill=blue!7},
-    branch/.style={draw, rounded corners, align=center, minimum width=34mm, minimum height=10mm, fill=green!8},
-    eval/.style={draw, rounded corners, align=center, minimum width=36mm, minimum height=10mm, fill=orange!10},
-    warn/.style={draw, rounded corners, align=center, minimum width=40mm, minimum height=10mm, fill=red!8},
-    arrow/.style={-Latex, thick}
+    node distance=9mm and 10mm,
+    block/.style={draw=black!55, rounded corners=2pt, align=center,
+      text width=34mm, minimum height=11mm, inner sep=4pt, fill=black!2},
+    wide/.style={draw=black!55, rounded corners=2pt, align=left,
+      text width=112mm, minimum height=24mm, inner sep=6pt, fill=black!2},
+    output/.style={draw=black!60, rounded corners=2pt, align=center,
+      text width=40mm, minimum height=12mm, inner sep=4pt, fill=black!4},
+    selected/.style={draw=black!65, rounded corners=2pt, align=center,
+      text width=44mm, minimum height=13mm, inner sep=4pt, fill=black!6},
+    arrow/.style={-Latex, line width=0.55pt, black!75}
   ]
-    \node[stage] (data) {APTOS 2019\\fundus images\\5 DR grades};
-    \node[stage, right=of data] (prep) {Preprocessing\\crop, resize, green\\CLAHE, median blur};
-    \node[stage, right=of prep] (splits) {Fixed arrays\\train / validation / test\\\((224,224,1)\)};
+    \node[block] (data) {\textbf{Input}\\APTOS 2019\\5 DR grades};
+    \node[block, right=of data] (prep) {\textbf{Preprocessing}\\crop, resize\\green channel\\CLAHE, median blur};
+    \node[block, right=of prep] (splits) {\textbf{Fixed arrays}\\train / validation / test\\\((224,224,1)\)};
 
-    \node[branch, below left=12mm and -3mm of splits] (b0) {B0 baseline\\class weights};
-    \node[branch, right=of b0] (b1b3) {Backbone ablation\\B1 and B3\\class weights};
-    \node[branch, right=of b1b3] (smote) {SMOTE ablation\\training split only};
-    \node[branch, right=of smote] (ordinal) {Ordinal regression\\severity score\\QWK thresholds};
+    \node[wide, below=12mm of prep] (experiments) {%
+      \centering\textbf{Experimental runs}\\[1mm]
+      \begin{tabular}{@{}ll@{}}
+        B0 baseline & class-weighted softmax \\
+        B1/B3 backbone ablation & same recipe, changed backbone \\
+        SMOTE ablation & training split only \\
+        Ordinal regression & severity score with QWK-tuned thresholds
+      \end{tabular}
+    };
 
-    \node[eval, below=14mm of b1b3] (metrics) {Evaluation\\QWK, accuracy\\per-class Se/Sp\\macro AUC};
-    \node[eval, right=of metrics] (xai) {Explainability audit\\Grad-CAM\\Grad-CAM++\\Score-CAM};
-    \node[warn, below=13mm of metrics, xshift=28mm] (selected) {Selected model\\EfficientNetB3\\QWK \(0.8908\)\\severe-recall caveat};
+    \node[output, below left=12mm and 5mm of experiments] (metrics)
+      {\textbf{Evaluation}\\QWK, accuracy\\per-class Se/Sp\\macro AUC};
+    \node[output, below right=12mm and 5mm of experiments] (xai)
+      {\textbf{XAI audit}\\Grad-CAM\\Grad-CAM++\\Score-CAM};
+    \coordinate (auditmid) at ($(metrics)!0.5!(xai)$);
+    \node[selected, below=12mm of auditmid] (selected)
+      {\textbf{Selected model}\\EfficientNetB3\\QWK \(0.8908\)\\severe-recall caveat};
 
     \draw[arrow] (data) -- (prep);
     \draw[arrow] (prep) -- (splits);
-    \draw[arrow] (splits) |- (b0);
-    \draw[arrow] (splits) |- (b1b3);
-    \draw[arrow] (splits) |- (smote);
-    \draw[arrow] (splits) |- (ordinal);
-    \draw[arrow] (b0) -- (metrics);
-    \draw[arrow] (b1b3) -- (metrics);
-    \draw[arrow] (smote) |- (metrics);
-    \draw[arrow] (ordinal) |- (metrics);
-    \draw[arrow] (metrics) -- (selected);
-    \draw[arrow] (xai) -- (selected);
-    \draw[arrow] (b1b3) |- (xai);
-
-    \node[draw, dashed, rounded corners, fit=(b0)(b1b3)(smote)(ordinal), inner sep=5mm, label={[font=\small]above:Experimental branches}] {};
+    \draw[arrow] (splits.south) -- (experiments.north);
+    \draw[arrow] (experiments.south west) -- (metrics.north);
+    \draw[arrow] (experiments.south east) -- (xai.north);
+    \draw[arrow] (metrics.south) -- (selected.north west);
+    \draw[arrow] (xai.south) -- (selected.north east);
   \end{tikzpicture}
   }
   \caption{Implemented DR grading research pipeline. Fixed preprocessing and
