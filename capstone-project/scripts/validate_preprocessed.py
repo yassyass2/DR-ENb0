@@ -20,6 +20,7 @@ Exits with status 0 if all checks pass, 1 otherwise.
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 
 import cv2
@@ -59,7 +60,23 @@ def load_split(split: str, report: Report) -> tuple[np.ndarray, np.ndarray] | No
     return np.load(x_path), np.load(y_path)
 
 
-def check_split(split: str, X: np.ndarray, y: np.ndarray, report: Report) -> None:
+def load_smote_flag(report: Report) -> bool:
+    metadata_path = DATA_DIR / "splits" / "metadata.json"
+    if not metadata_path.exists():
+        report.warn(f"missing {metadata_path}; assuming baseline without SMOTE")
+        return False
+    with metadata_path.open("r", encoding="utf-8") as handle:
+        metadata = json.load(handle)
+    return bool(metadata.get("smote_train", False))
+
+
+def check_split(
+    split: str,
+    X: np.ndarray,
+    y: np.ndarray,
+    report: Report,
+    smote_train: bool,
+) -> None:
     # Shape / dtype
     if X.shape[1:] != EXPECTED_SHAPE:
         report.fail(f"X_{split} shape {X.shape[1:]} != expected {EXPECTED_SHAPE}")
@@ -106,13 +123,17 @@ def check_split(split: str, X: np.ndarray, y: np.ndarray, report: Report) -> Non
         report.warn(f"y_{split} missing classes: {missing}")
     report.ok(f"y_{split} class distribution: {class_dist}")
 
-    # SMOTE expectation on train; natural imbalance on val/test
+    # SMOTE expectation on train only when this output directory opted into it.
     if split == "train":
-        if len(set(counts.tolist())) == 1:
+        if smote_train and len(set(counts.tolist())) == 1:
             report.ok("train is class-balanced (SMOTE applied)")
-        else:
+        elif smote_train:
             report.fail(f"train is NOT class-balanced -- SMOTE may not have run. "
                         f"Counts: {class_dist}")
+        elif len(set(counts.tolist())) == 1 and len(counts) > 1:
+            report.warn("train is perfectly balanced although SMOTE metadata is false")
+        else:
+            report.ok("train keeps natural class distribution (baseline)")
     else:
         if len(set(counts.tolist())) == 1 and len(counts) > 1:
             report.warn(f"{split} is perfectly balanced -- unexpected for a natural "
@@ -139,6 +160,7 @@ def main() -> int:
         return 1
 
     report = Report()
+    smote_train = load_smote_flag(report)
     loaded: dict[str, tuple[np.ndarray, np.ndarray]] = {}
 
     for split in SPLITS:
@@ -147,7 +169,7 @@ def main() -> int:
         if data is None:
             continue
         loaded[split] = data
-        check_split(split, data[0], data[1], report)
+        check_split(split, data[0], data[1], report, smote_train=smote_train)
 
     print("\n=== SAMPLES ===")
     for split, (X, y) in loaded.items():

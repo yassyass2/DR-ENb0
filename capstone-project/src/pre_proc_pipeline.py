@@ -1,27 +1,23 @@
 """
 Per-image preprocessing pipeline for the APTOS 2019 diabetic-retinopathy
-dataset, reproducing the procedure of the reference paper for an
-EfficientNet-B0 classifier (224 x 224 x 3 input).
+dataset, using the project's canonical green-channel contract for an
+EfficientNet-B0 classifier (224 x 224 x 1 input).
 
-Per-image steps (paper order):
-  1. Resize        -> 224 x 224
-  2. CLAHE         -> contrast enhancement on the LAB lightness channel
-  3. Noise         -> median blur, kernel size 3 (applied after CLAHE)
-  4. Normalisation -> divide by 255 so each channel lies in [0, 1] (float32)
+Per-image steps:
+  1. Crop black border
+  2. Resize with aspect-ratio preserving padding -> 224 x 224
+  3. Green channel extraction + CLAHE
+  4. Noise reduction -> median blur, kernel size 3
+  5. Normalisation -> divide by 255 so values lie in [0, 1] (float32)
 
 Dataset level:
   5. Train/validation split
   6. SMOTE         -> balance the TRAINING partition only
 
-The paper applies no cropping or quality filtering. Optional cut-off filtering
-(``is_cut_off``) remains available through the ``skip_cut_off`` flag but is
-disabled by default to match the paper.
-
 Note on intensity scaling: pixel values are normalised to [0, 1] (the paper's
 final step), so the saved arrays are ``float32``. The Keras ``EfficientNetB0``
-model ships its own ``preprocess_input`` rescaling layer; feed it these
-already-[0, 1] values *without* calling ``preprocess_input`` again, otherwise
-the scaling is applied twice.
+model wrapper expands the one-channel input to three channels internally; feed
+it these already-[0, 1] values *without* calling ``preprocess_input``.
 """
 
 from __future__ import annotations
@@ -36,6 +32,7 @@ from src.preprocessing import (
     DEFAULT_IMAGE_SIZE,
     reduce_fundus_noise,
     apply_oversampling,
+    preprocess_fundus_rgb,
 )
 
 
@@ -202,10 +199,10 @@ def preprocess_image_path(
     **clahe_kwargs,
 ) -> np.ndarray | None:
     """
-    Read an image from disk and run the per-image preprocessing pipeline.
+    Read an image from disk and run the canonical per-image preprocessing pipeline.
 
     Returns the preprocessed ``float32`` image of shape
-    ``(image_size, image_size, 3)`` with values in [0, 1], or ``None`` if the
+    ``(image_size, image_size, 1)`` with values in [0, 1], or ``None`` if the
     image could not be read or (when ``skip_cut_off=False``) was filtered out as
     cut off.
 
@@ -222,10 +219,13 @@ def preprocess_image_path(
     if not skip_cut_off and is_cut_off(image):
         return None
 
-    return preprocess_image(
+    if denoise_method != "median":
+        raise ValueError("Canonical preprocessing supports denoise_method='median'.")
+
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    return preprocess_fundus_rgb(
         image,
         image_size=image_size,
-        denoise_method=denoise_method,
         **clahe_kwargs,
     )
 
@@ -301,7 +301,7 @@ def build_dataset(
 
     Returns
     -------
-    X : np.ndarray, shape (N, image_size, image_size, 3), dtype float32, [0, 1]
+    X : np.ndarray, shape (N, image_size, image_size, 1), dtype float32, [0, 1]
     y : np.ndarray, shape (N,), dtype int64
     """
     images_dir = Path(images_dir)

@@ -1148,9 +1148,15 @@ git commit -m "feat: select baseline checkpoints by validation QWK"
 - Create: `capstone-project/configs/efficientnet_b0_smote.json`
 - Modify: `capstone-project/src/pre_proc_pipeline.py`
 - Modify: `capstone-project/main.py`
+- Modify: `capstone-project/scripts/validate_preprocessed.py`
+- Modify: `capstone-project/tests/test_preprocessing_contract.py`
 - Modify: `capstone-project/readme.md`
 
-- [ ] **Step 1: Create SMOTE config**
+Implementation note: this task also wires `build_dataset()` to the canonical
+one-channel preprocessing contract. Without that, the baseline output would
+still be `(N, 224, 224, 3)` and fail the loader/model contract added earlier.
+
+- [x] **Step 1: Create SMOTE config**
 
 Create `capstone-project/configs/efficientnet_b0_smote.json`:
 
@@ -1194,7 +1200,7 @@ Create `capstone-project/configs/efficientnet_b0_smote.json`:
 }
 ```
 
-- [ ] **Step 2: Ensure baseline preprocessing does not apply SMOTE**
+- [x] **Step 2: Ensure baseline preprocessing does not apply SMOTE**
 
 In `main.py`, keep baseline output at:
 
@@ -1223,7 +1229,7 @@ out_dir = args.out_dir
 apply_smote = args.smote_train
 ```
 
-- [ ] **Step 3: Apply SMOTE only when explicitly requested**
+- [x] **Step 3: Apply SMOTE only when explicitly requested**
 
 In the train split branch:
 
@@ -1234,7 +1240,7 @@ if split == "train" and apply_smote:
 
 Validation and test must never be oversampled.
 
-- [ ] **Step 4: Update README commands**
+- [x] **Step 4: Update README commands**
 
 Add:
 
@@ -1253,7 +1259,7 @@ uv run python main.py --out-dir data/preprocessed_smote --smote-train
 ```
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -1263,7 +1269,7 @@ uv run python -m pytest capstone-project/tests -q
 
 Expected: all tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add capstone-project/configs/efficientnet_b0_smote.json capstone-project/main.py capstone-project/src/pre_proc_pipeline.py capstone-project/readme.md

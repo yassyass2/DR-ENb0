@@ -24,8 +24,8 @@ The current project is split into three clear steps:
 From the `capstone-project` directory:
 
 ```bash
-python main.py
-python scripts/validate_preprocessed.py
+uv run python main.py --out-dir data/preprocessed
+uv run python scripts/validate_preprocessed.py
 ```
 
 This writes the following files under `data/preprocessed`:
@@ -34,6 +34,14 @@ This writes the following files under `data/preprocessed`:
 X_train.npy, y_train.npy
 X_val.npy, y_val.npy
 X_test.npy, y_test.npy
+splits/train.csv, splits/val.csv, splits/test.csv, splits/metadata.json
+```
+
+SMOTE is a separate experiment, not the default baseline preprocessing:
+
+```bash
+uv run python main.py --out-dir data/preprocessed_smote --smote-train
+uv run python src/train.py --config configs/efficientnet_b0_smote.json
 ```
 
 ## Training structure
@@ -57,7 +65,7 @@ configs/efficientnet_b0.json
 Run training from the repository root:
 
 ```bash
-python capstone-project/src/train.py
+uv run python capstone-project/src/train.py
 ```
 
 This runs the full pipeline: load the preprocessed arrays, build EfficientNet-B0

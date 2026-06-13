@@ -1,0 +1,37 @@
+{
+  "experiment": {
+    "name": "aptos-dr-classification",
+    "run_name": "efficientnet-b0-smote-green"
+  },
+  "data": {
+    "preprocessed_dir": "data/preprocessed_smote",
+    "image_size": 224,
+    "num_classes": 5,
+    "channels": 1,
+    "value_range": "[0,1]"
+  },
+  "model": {
+    "name": "efficientnet_b0",
+    "weights": "imagenet",
+    "dropout": 0.3,
+    "fine_tune_at": null
+  },
+  "training": {
+    "batch_size": 16,
+    "epochs": 30,
+    "warmup_epochs": 0,
+    "fine_tune_epochs": 30,
+    "learning_rate": 0.001,
+    "fine_tune_learning_rate": 0.00001,
+    "early_stopping_patience": 8,
+    "augment": true,
+    "seed": 42,
+    "class_weight": null,
+    "checkpoint_monitor": "val_qwk",
+    "checkpoint_mode": "max"
+  },
+  "preprocessing": {
+    "smote_train": true,
+    "smote_random_state": 42
+  }
+}
