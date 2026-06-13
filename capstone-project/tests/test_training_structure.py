@@ -14,6 +14,7 @@ if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
 from src.data import DatasetSummary, load_preprocessed_data
+from src.evaluate import optimize_regression_thresholds, scores_to_grades
 from src.model import balanced_class_weights, resolve_artifacts_dir
 from src.tracking import configure_mlflow, load_training_config
 
@@ -27,6 +28,14 @@ class TrainingStructureTests(unittest.TestCase):
         self.assertIn("run_name", config["experiment"])
         self.assertEqual(config["training"]["checkpoint_monitor"], "val_qwk")
         self.assertEqual(config["training"]["checkpoint_mode"], "max")
+
+    def test_load_regression_config_uses_separate_artifact_dir(self) -> None:
+        config = load_training_config(
+            PROJECT_DIR / "configs" / "efficientnet_b0_regression.json"
+        )
+
+        self.assertEqual(config["model"]["head"], "regression")
+        self.assertEqual(resolve_artifacts_dir(config), PROJECT_DIR / "artifacts" / "regression")
 
     def test_load_preprocessed_data_loads_all_splits_and_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -88,6 +97,32 @@ class TrainingStructureTests(unittest.TestCase):
 
         self.assertEqual(weights[0], 4 / (2 * 3))
         self.assertEqual(weights[1], 4 / (2 * 1))
+
+    def test_scores_to_grades_applies_ordered_thresholds(self) -> None:
+        scores = np.array([-1.0, 0.49, 0.50, 1.49, 1.50, 2.5, 3.5, 9.0])
+
+        grades = scores_to_grades(
+            scores,
+            thresholds=[0.5, 1.5, 2.5, 3.5],
+            num_classes=5,
+        )
+
+        self.assertEqual(grades.tolist(), [0, 0, 1, 1, 2, 3, 4, 4])
+
+    def test_optimize_regression_thresholds_improves_qwk_on_validation_scores(self) -> None:
+        y_true = np.array([0, 0, 1, 1, 2, 2, 3, 3, 4, 4], dtype=np.int64)
+        scores = np.array([0.1, 0.2, 0.8, 1.0, 1.6, 1.8, 2.4, 2.6, 3.1, 3.3])
+
+        thresholds, qwk = optimize_regression_thresholds(
+            y_true,
+            scores,
+            num_classes=5,
+            grid_size=12,
+        )
+
+        self.assertEqual(len(thresholds), 4)
+        self.assertTrue(np.all(np.diff(thresholds) > 0))
+        self.assertGreaterEqual(qwk, 0.95)
 
     def test_smote_config_writes_to_separate_artifact_dir(self) -> None:
         baseline = load_training_config(PROJECT_DIR / "configs" / "efficientnet_b0.json")

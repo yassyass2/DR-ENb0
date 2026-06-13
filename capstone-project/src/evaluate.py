@@ -21,6 +21,7 @@ be run standalone against a saved ``.keras`` model.
 
 from __future__ import annotations
 
+import itertools
 import json
 from pathlib import Path
 from typing import Any, Sequence
@@ -52,6 +53,74 @@ def quadratic_weighted_kappa(
     Returns a value in [-1, 1]; 1 is perfect agreement, 0 is chance-level.
     """
     return float(cohen_kappa_score(y_true, y_pred, weights="quadratic"))
+
+
+def scores_to_grades(
+    scores: Sequence[float] | np.ndarray,
+    thresholds: Sequence[float],
+    num_classes: int = 5,
+) -> np.ndarray:
+    """Convert ordinal regression scores to integer grades using thresholds."""
+    thresholds = np.asarray(thresholds, dtype=np.float32)
+    if len(thresholds) != num_classes - 1:
+        raise ValueError(
+            f"Expected {num_classes - 1} thresholds for {num_classes} classes, "
+            f"got {len(thresholds)}"
+        )
+    if np.any(np.diff(thresholds) <= 0):
+        raise ValueError("Regression thresholds must be strictly increasing")
+
+    grades = np.digitize(np.asarray(scores, dtype=np.float32).reshape(-1), thresholds)
+    return np.clip(grades, 0, num_classes - 1).astype(int)
+
+
+def score_to_class_affinity(
+    scores: Sequence[float] | np.ndarray,
+    num_classes: int = 5,
+    sigma: float = 0.75,
+) -> np.ndarray:
+    """
+    Convert scalar severity scores into class-affinity values for AUC reporting.
+
+    These are not softmax probabilities; they are normalized ordinal affinities
+    based on distance to class centers. The hard grades remain threshold-based.
+    """
+    scores = np.asarray(scores, dtype=np.float32).reshape(-1, 1)
+    centers = np.arange(num_classes, dtype=np.float32).reshape(1, -1)
+    affinity = np.exp(-0.5 * ((scores - centers) / sigma) ** 2)
+    return affinity / affinity.sum(axis=1, keepdims=True)
+
+
+def optimize_regression_thresholds(
+    y_true: Sequence[int] | np.ndarray,
+    scores: Sequence[float] | np.ndarray,
+    num_classes: int = 5,
+    grid_size: int = 41,
+) -> tuple[list[float], float]:
+    """
+    Tune ordered score thresholds on validation data by maximizing QWK.
+
+    The search is a deterministic grid over the score range. It is cheap at
+    validation-set scale and keeps the final test evaluation independent.
+    """
+    y_true = np.asarray(y_true).astype(int)
+    scores = np.asarray(scores, dtype=np.float32).reshape(-1)
+    lower = float(min(scores.min(), 0.0))
+    upper = float(max(scores.max(), num_classes - 1.0))
+    grid = np.linspace(lower, upper, grid_size)
+
+    best_thresholds = [float(i + 0.5) for i in range(num_classes - 1)]
+    best_qwk = quadratic_weighted_kappa(
+        y_true, scores_to_grades(scores, best_thresholds, num_classes)
+    )
+    for thresholds in itertools.combinations(grid[1:-1], num_classes - 1):
+        y_pred = scores_to_grades(scores, thresholds, num_classes)
+        qwk = quadratic_weighted_kappa(y_true, y_pred)
+        if qwk > best_qwk:
+            best_qwk = qwk
+            best_thresholds = [float(t) for t in thresholds]
+
+    return best_thresholds, float(best_qwk)
 
 
 def per_class_sensitivity_specificity(

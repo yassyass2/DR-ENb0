@@ -56,9 +56,13 @@ if str(PROJECT_DIR) not in sys.path:
 from src.data import PreprocessedDataset, load_preprocessed_data
 from src.evaluate import (
     evaluate_predictions,
+    evaluate_classification,
     format_report,
     metrics_for_logging,
+    optimize_regression_thresholds,
     quadratic_weighted_kappa,
+    score_to_class_affinity,
+    scores_to_grades,
 )
 from src.tracking import (
     configure_mlflow,
@@ -116,6 +120,7 @@ def build_model(
     weights: str | None = "imagenet",
     augment: bool = True,
     seed: int = 42,
+    head: str = "classification",
 ) -> tuple[keras.Model, keras.Model]:
     """
     Build the EfficientNet-B0 transfer-learning model.
@@ -169,18 +174,36 @@ def build_model(
     x = layers.Dropout(dropout, name="head_dropout")(x)
     x = layers.Dense(1024, activation="relu", name="head_dense")(x)
     x = layers.Dropout(dropout, name="head_dropout_2")(x)
-    outputs = layers.Dense(num_classes, activation="softmax", name="predictions")(x)
+    if head == "classification":
+        outputs = layers.Dense(num_classes, activation="softmax", name="predictions")(x)
+    elif head == "regression":
+        outputs = layers.Dense(1, activation="linear", name="severity_score")(x)
+    else:
+        raise ValueError(f"Unsupported model head: {head}")
 
     model = keras.Model(inputs, outputs, name="efficientnet_b0_dr")
     return model, base_model
 
 
-def compile_model(model: keras.Model, learning_rate: float) -> keras.Model:
-    """Compile with Adam + sparse categorical cross-entropy (integer labels)."""
+def compile_model(
+    model: keras.Model,
+    learning_rate: float,
+    head: str = "classification",
+) -> keras.Model:
+    """Compile the model for classification or ordinal regression."""
+    if head == "classification":
+        loss = "sparse_categorical_crossentropy"
+        metrics = ["accuracy"]
+    elif head == "regression":
+        loss = keras.losses.Huber(delta=1.0)
+        metrics = [keras.metrics.MeanAbsoluteError(name="mae")]
+    else:
+        raise ValueError(f"Unsupported model head: {head}")
+
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
-        loss="sparse_categorical_crossentropy",
-        metrics=["accuracy"],
+        loss=loss,
+        metrics=metrics,
     )
     return model
 
@@ -240,8 +263,15 @@ class QWKCallback(keras.callbacks.Callback):
 
     def on_epoch_end(self, epoch: int, logs: dict[str, Any] | None = None) -> None:
         logs = logs if logs is not None else {}
-        proba = self.model.predict(self.x_val, batch_size=self.batch_size, verbose=0)
-        y_pred = proba.argmax(axis=1)
+        predictions = self.model.predict(self.x_val, batch_size=self.batch_size, verbose=0)
+        if predictions.ndim == 2 and predictions.shape[1] == 1:
+            y_pred = scores_to_grades(
+                predictions.reshape(-1),
+                thresholds=[0.5, 1.5, 2.5, 3.5],
+                num_classes=5,
+            )
+        else:
+            y_pred = predictions.argmax(axis=1)
         qwk = quadratic_weighted_kappa(self.y_val, y_pred)
         logs["val_qwk"] = qwk
         print(f"  - val_qwk: {qwk:.4f}")
@@ -269,6 +299,7 @@ def train_model(
     """
     training = config.get("training", {})
     model_cfg = config.get("model", {})
+    head = model_cfg.get("head", "classification")
 
     batch_size = int(training.get("batch_size", 16))
     warmup_lr = float(training.get("learning_rate", 1e-4))
@@ -281,24 +312,34 @@ def train_model(
     fine_tune_at = model_cfg.get("fine_tune_at")
 
     x_train, y_train = dataset.X_train, dataset.y_train
-    val_data = (dataset.X_val, dataset.y_val)
+    y_train_fit = y_train.astype(np.float32) if head == "regression" else y_train
+    y_val_fit = dataset.y_val.astype(np.float32) if head == "regression" else dataset.y_val
+    val_data = (dataset.X_val, y_val_fit)
     qwk_callback = QWKCallback(dataset.X_val, dataset.y_val, batch_size=batch_size)
     class_weight = (
         balanced_class_weights(y_train)
         if training.get("class_weight") == "balanced"
         else None
     )
+    sample_weight = None
+    if head == "regression" and class_weight is not None:
+        sample_weight = np.asarray(
+            [class_weight[int(label)] for label in y_train],
+            dtype=np.float32,
+        )
+        class_weight = None
 
     # -- Phase 1: warm up the head -----------------------------------------
     print(f"\n=== Phase 1: warm-up head ({warmup_epochs} epochs, lr={warmup_lr}) ===")
-    compile_model(model, warmup_lr)
+    compile_model(model, warmup_lr, head=head)
     history_warmup = model.fit(
         x_train,
-        y_train,
+        y_train_fit,
         validation_data=val_data,
         epochs=warmup_epochs,
         batch_size=batch_size,
         class_weight=class_weight,
+        sample_weight=sample_weight,
         callbacks=[qwk_callback],
         verbose=2,
     )
@@ -310,7 +351,7 @@ def train_model(
         f"fine_tune_at={fine_tune_at}) ==="
     )
     fine_tune(base_model, fine_tune_at)
-    compile_model(model, fine_tune_lr)  # re-compile so trainable changes apply.
+    compile_model(model, fine_tune_lr, head=head)  # re-compile so trainable changes apply.
 
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     callbacks = [
@@ -342,12 +383,13 @@ def train_model(
     total_epochs = warmup_epochs + fine_tune_epochs
     history_ft = model.fit(
         x_train,
-        y_train,
+        y_train_fit,
         validation_data=val_data,
         epochs=total_epochs,
         initial_epoch=warmup_epochs,
         batch_size=batch_size,
         class_weight=class_weight,
+        sample_weight=sample_weight,
         callbacks=callbacks,
         verbose=2,
     )
@@ -372,10 +414,33 @@ def evaluate_on_test(
     dataset: PreprocessedDataset,
     num_classes: int,
     batch_size: int = 32,
+    head: str = "classification",
 ) -> dict[str, Any]:
     """Predict on the test split and build the full metric report."""
-    proba = model.predict(dataset.X_test, batch_size=batch_size, verbose=0)
-    return evaluate_predictions(dataset.y_test, proba, num_classes=num_classes)
+    predictions = model.predict(dataset.X_test, batch_size=batch_size, verbose=0)
+    if head == "classification":
+        return evaluate_predictions(dataset.y_test, predictions, num_classes=num_classes)
+
+    if head == "regression":
+        val_scores = model.predict(dataset.X_val, batch_size=batch_size, verbose=0).reshape(-1)
+        thresholds, val_qwk = optimize_regression_thresholds(
+            dataset.y_val,
+            val_scores,
+            num_classes=num_classes,
+        )
+        test_scores = predictions.reshape(-1)
+        y_pred = scores_to_grades(test_scores, thresholds, num_classes=num_classes)
+        report = evaluate_classification(
+            dataset.y_test,
+            y_pred,
+            score_to_class_affinity(test_scores, num_classes=num_classes),
+            num_classes=num_classes,
+        )
+        report["regression_thresholds"] = thresholds
+        report["validation_threshold_qwk"] = val_qwk
+        return report
+
+    raise ValueError(f"Unsupported model head: {head}")
 
 
 # ---------------------------------------------------------------------------
@@ -414,6 +479,7 @@ def run_training(config: dict[str, Any]) -> dict[str, Any]:
     num_classes = int(data_cfg.get("num_classes", 5))
     image_size = int(data_cfg.get("image_size", 224))
     batch_size = int(training_cfg.get("batch_size", 16))
+    head = model_cfg.get("head", "classification")
 
     set_seeds(seed)
 
@@ -459,6 +525,7 @@ def run_training(config: dict[str, Any]) -> dict[str, Any]:
             weights=model_cfg.get("weights", "imagenet"),
             augment=bool(training_cfg.get("augment", True)),
             seed=seed,
+            head=head,
         )
         model.summary(print_fn=lambda line: print(line))
 
@@ -471,7 +538,13 @@ def run_training(config: dict[str, Any]) -> dict[str, Any]:
             model = keras.models.load_model(checkpoint_path)
 
         # 5. Evaluate -------------------------------------------------------
-        report = evaluate_on_test(model, dataset, num_classes, batch_size=batch_size)
+        report = evaluate_on_test(
+            model,
+            dataset,
+            num_classes,
+            batch_size=batch_size,
+            head=head,
+        )
         print("\n" + format_report(report))
 
         # 6. Persist + log --------------------------------------------------

@@ -34,6 +34,26 @@ class ModelContractTests(unittest.TestCase):
         self.assertEqual(predictions.shape, (2, 5))
         np.testing.assert_allclose(predictions.sum(axis=1), np.ones(2), atol=1e-5)
 
+    def test_regression_model_outputs_single_severity_score(self) -> None:
+        model, base_model = build_model(
+            num_classes=5,
+            image_size=224,
+            dropout=0.3,
+            weights=None,
+            augment=False,
+            seed=42,
+            head="regression",
+        )
+
+        self.assertEqual(model.input_shape, (None, 224, 224, 1))
+        self.assertEqual(model.output_shape, (None, 1))
+        self.assertFalse(base_model.trainable)
+
+        batch = np.random.default_rng(1).random((2, 224, 224, 1), dtype=np.float32)
+        predictions = model.predict(batch, verbose=0)
+
+        self.assertEqual(predictions.shape, (2, 1))
+
 
 if __name__ == "__main__":
     unittest.main()
