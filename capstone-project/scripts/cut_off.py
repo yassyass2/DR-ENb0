@@ -3,7 +3,7 @@ QA utility: sort the APTOS-2019 training images into "cut-off" and "normal"
 folders so the cut-off filter can be eyeballed.
 
 This is a one-off diagnostic script, NOT part of the training pipeline. It
-reuses the canonical cut-off detector from ``src/pre_proc_pipeline.py`` (the
+reuses the canonical cut-off detector from ``dr_grading/pre_proc_pipeline.py`` (the
 3-of-4-border criterion that the pipeline actually applies) rather than
 re-implementing it, so what you see here matches what ``build_dataset`` drops.
 
@@ -26,15 +26,16 @@ import kagglehub
 from tqdm import tqdm
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
-if str(PROJECT_DIR) not in sys.path:
-    sys.path.insert(0, str(PROJECT_DIR))
+SRC_DIR = PROJECT_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 # Reuse the pipeline's cut-off logic instead of duplicating it. _border_retina_ratios
 # is imported only for the diagnostic print below.
-from src.pre_proc_pipeline import (
+from dr_grading.pre_proc_pipeline import (
     create_retina_mask,
-    is_cut_off,
     _border_retina_ratios,
+    is_cut_off,
 )
 
 

@@ -10,11 +10,12 @@ from pathlib import Path
 import numpy as np
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
-if str(PROJECT_DIR) not in sys.path:
-    sys.path.insert(0, str(PROJECT_DIR))
+SRC_DIR = PROJECT_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
-from src.data import DatasetSummary, load_preprocessed_data
-from src.tracking import configure_mlflow, load_training_config
+from dr_grading.data import DatasetSummary, load_preprocessed_data
+from dr_grading.tracking import configure_mlflow, load_training_config
 
 
 class TrainingStructureTests(unittest.TestCase):

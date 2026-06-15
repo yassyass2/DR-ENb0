@@ -1,87 +1,85 @@
-# APTOS 2019 Blindness Detection - Capstone Project
+# APTOS 2019 Diabetic Retinopathy Grading
 
-## Team
+This repository contains the Group 5 AI for Health capstone pipeline for five-class diabetic retinopathy grading on APTOS 2019 fundus images. The project is organised as a reproducible research codebase: preprocessing, model training, evaluation, experiment tracking and explainability are available from one Python package, `dr_grading`.
 
-**Course:** AI for Health - Group 5  
-**Members:** Yassine Abderrazik, Adel Atzouza, Ozeir Moradi, Musab Sivrikaya, Mark Salloum
+The model pipeline uses an EfficientNet-B0 backbone with a custom classification head. Images are resized to 224 x 224, enhanced with CLAHE on the LAB lightness channel, denoised with a 3 x 3 median filter and normalised to `[0, 1]`. The training split is balanced with SMOTE after preprocessing. Validation and test splits keep their natural class distribution.
 
-**Project:** Diabetic Retinopathy Classification using CNNs
-
-## Overview
-
-This project develops a CNN-based classifier for detecting diabetic retinopathy severity using the APTOS 2019 Blindness Detection dataset. The model classifies retinal images into 5 categories (0-4) representing different stages of diabetic retinopathy.
-
-## Project flow
-
-The current project is split into three clear steps:
-
-1. Preprocess the APTOS dataset into model-ready numpy arrays.
-2. Validate those arrays before training.
-3. Train and track experiments with MLflow.
-
-## Preprocessing
-
-From the `capstone-project` directory:
-
-```bash
-python main.py
-python scripts/validate_preprocessed.py
-```
-
-This writes the following files under `data/preprocessed`:
+## Project Layout
 
 ```text
-X_train.npy, y_train.npy
-X_val.npy, y_val.npy
-X_test.npy, y_test.npy
+capstone-project/
+  configs/                 Training configuration
+  docs/                    Methodology notes and paper assets
+  scripts/                 One-off QA utilities
+  src/dr_grading/          Research pipeline package
+  tests/                   Contract tests for structure and training utilities
+  artifacts/               Generated reports, figures and model outputs
+  data/                    Local generated data; not a source artifact
 ```
 
-## Training structure
+The old script paths under `capstone-project/src/*.py` are kept as compatibility wrappers. New work should import from `dr_grading` or use the `dr-grading` CLI.
 
-Training code lives under `src`:
+## Reproducible Commands
+
+Run from the repository root.
+
+```bash
+uv run dr-grading preprocess
+uv run python capstone-project/scripts/validate_preprocessed.py
+uv run dr-grading train --config capstone-project/configs/efficientnet_b0.json
+```
+
+Preprocessing writes `preprocessing_manifest.json` next to the generated arrays. The manifest records the dataset location, package version, Git commit, preprocessing parameters, split distributions and the fact that SMOTE was applied only to the training split.
+
+Training writes each run under a timestamped artifact directory:
 
 ```text
-src/data.py       Load and summarize preprocessed arrays.
-src/model.py      EfficientNet-B0 model + two-phase training loop (core logic).
-src/tracking.py   Configure MLflow and load training config.
-src/train.py      Training entry point (CLI wrapper around src/model.py).
-src/evaluate.py   QWK, per-class sensitivity/specificity and ROC-AUC metrics.
+capstone-project/artifacts/<run-name>-<YYYYMMDDTHHMMSSZ>/
+  best_model.keras
+  final_model.keras
+  test_report.json
 ```
 
-The default training config is:
+The artifact directory is also logged to MLflow as `artifact_run_dir`, so the tracking run and filesystem outputs can be matched later.
+
+Legacy commands still work:
+
+```bash
+uv run python capstone-project/main.py
+uv run python capstone-project/src/train.py
+```
+
+## Experiment Tracking
+
+By default, MLflow uses a local SQLite tracking store:
 
 ```text
-configs/efficientnet_b0.json
+capstone-project/mlflow.db
+capstone-project/mlartifacts/
 ```
 
-Run training from the repository root:
+For a shared tracking server:
 
 ```bash
-python capstone-project/src/train.py
+MLFLOW_TRACKING_URI=http://localhost:5000 \
+  uv run dr-grading train --config capstone-project/configs/efficientnet_b0.json
 ```
 
-This runs the full pipeline: load the preprocessed arrays, build EfficientNet-B0
-(frozen ImageNet backbone + a small custom head), warm up the head, then unfreeze
-and fine-tune the backbone with QWK-monitored checkpointing, early stopping and
-LR reduction, and finally evaluate on the held-out test split. Outputs are written
-to `artifacts/` (`best_model.keras`, `final_model.keras`, `test_report.json`) and,
-if MLflow is installed, logged to the tracking store.
-
-`src/train.py` and `src/model.py` are equivalent entry points; both accept
-`--config` to point at a different config file.
-
-By default MLflow uses a local SQLite tracking store at `capstone-project/mlflow.db` and stores artifacts in `capstone-project/mlartifacts`. To use a shared tracking server, set `MLFLOW_TRACKING_URI` before running training.
+Start a local UI:
 
 ```bash
-MLFLOW_TRACKING_URI=http://localhost:5000 python capstone-project/src/train.py
+uv run mlflow server \
+  --backend-store-uri sqlite:///capstone-project/mlflow.db \
+  --default-artifact-root capstone-project/mlartifacts \
+  --port 5000
 ```
 
-Start the local MLflow UI with:
+## Evaluation
 
-```bash
-mlflow server --backend-store-uri sqlite:///capstone-project/mlflow.db --default-artifact-root capstone-project/mlartifacts --port 5000
-```
+The main selection metric is Quadratic Weighted Kappa, matching the ordinal nature of DR severity. The test report also includes accuracy, macro sensitivity, macro specificity, macro ROC-AUC, per-class sensitivity/specificity/AUC and the confusion matrix.
 
-## Training runtime
+Current tracked figures and historical reports are generated artifacts, not the paper-final source of truth. Before using numbers in the paper, regenerate preprocessing, training, evaluation, plots and Grad-CAM from the same commit and MLflow run.
 
-The training runtime is pinned to Python 3.13 with TensorFlow 2.21. TensorFlow 2.21 supports Python 3.10-3.13; Python 3.14 is not a supported TensorFlow runtime for this project.
+## Runtime
+
+The runtime is pinned to Python `>=3.13,<3.14` with TensorFlow `>=2.21,<2.22`. Python 3.14 is intentionally excluded because it is outside the supported TensorFlow range for this project.

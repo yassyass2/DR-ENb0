@@ -4,7 +4,10 @@ data/raw/**
 *.zip
 *.tar.gz
 
-# Preprocessed data kan erbij, ligt aan hoe groot het wordt
+# Generated data and derived samples
+data/preprocessed/
+data/preprocessed_smote/
+data/**/_samples/
 
 # Model files
 *.h5
@@ -22,6 +25,7 @@ mlflow.db
 mlflow.db-*
 
 # Training outputs
+artifacts/
 logs/
 runs/
 outputs/
@@ -29,7 +33,7 @@ results/
 *.log
 
 # Large numpy/pickle files
-*.npy 
+*.npy
 *.npz
 *.pkl
 *.pickle

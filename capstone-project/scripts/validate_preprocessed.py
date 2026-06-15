@@ -25,7 +25,14 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-DATA_DIR = Path("data/preprocessed")
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+SRC_DIR = PROJECT_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from dr_grading.paths import DEFAULT_PREPROCESSED_DIR
+
+DATA_DIR = DEFAULT_PREPROCESSED_DIR
 SAMPLES_DIR = DATA_DIR / "_samples"
 SPLITS = ["train", "val", "test"]
 EXPECTED_SHAPE = (224, 224, 3)

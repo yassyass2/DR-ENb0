@@ -1,17 +1,32 @@
 [project]
 name = "dr-ml"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
+description = "Research pipeline for diabetic retinopathy severity grading on APTOS 2019 fundus images."
+readme = "capstone-project/readme.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "imblearn>=0.0",
     "kagglehub[pandas-datasets]>=1.0.1",
+    "matplotlib>=3.10.0",
     "mlflow>=3.13.0",
     "numpy>=2.4.4",
     "opencv-python>=4.13.0.92",
     "pandas>=2.2,<3.0",
+    "scikit-learn>=1.8.0",
     "seaborn>=0.13.2",
     "tensorflow>=2.21,<2.22",
     "tqdm>=4.67.3",
 ]
+
+[project.scripts]
+dr-grading = "dr_grading.cli:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "capstone-project/src"}
+
+[tool.setuptools.packages.find]
+where = ["capstone-project/src"]

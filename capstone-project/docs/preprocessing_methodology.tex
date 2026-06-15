@@ -181,13 +181,10 @@ balanced training set (Table~\ref{tab:counts}).
 
 \begin{table}[t]
   \centering
-  \caption{Per-class image counts at each stage of the pipeline. Grades follow
-  the five-point clinical DR scale (0--4). \textbf{These counts are stale:}
-  they were produced by an earlier version of the pipeline that applied quality
-  filtering, and are retained only for reference. They must be regenerated from
-  a run of the current procedure, which discards no images (so the ``raw'' row
-  is the input to SMOTE) and balances every training grade to the majority
-  count of \num{1434}, giving \num{7170} training images in total.}
+  \caption{Per-class image counts used by the current no-filter preprocessing
+  pipeline. Grades follow the five-point clinical DR scale (0--4). SMOTE is
+  applied only to the training partition; validation and test keep the natural
+  class distribution.}
   \label{tab:counts}
   \begin{tabular}{lrrrrrr}
     \toprule
@@ -196,11 +193,10 @@ balanced training set (Table~\ref{tab:counts}).
     Stage & 0 & 1 & 2 & 3 & 4 & Total \\
     \midrule
     Train (raw)            & 1434 & 300 & 808 & 154 & 234 & 2930 \\
-    Train (after filter)   & 1411 & 294 & 770 & 145 & 229 & 2849 \\
-    Train (after SMOTE)    & 1411 & 1411 & 1411 & 1411 & 1411 & 7055 \\
+    Train (after SMOTE)    & 1434 & 1434 & 1434 & 1434 & 1434 & 7170 \\
     \midrule
-    Validation (after filter) & 169 & 40 & 98 & 21 & 28 & 356 \\
-    Test (after filter)       & 196 & 29 & 84 & 17 & 33 & 359 \\
+    Validation             & 172 & 40 & 104 & 22 & 28 & 366 \\
+    Test                   & 199 & 30 & 87 & 17 & 33 & 366 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -217,7 +213,11 @@ be passed to the Keras EfficientNet-B0 model \emph{without} a further call to
 its \texttt{preprocess\_input} rescaling layer, which would otherwise apply the
 scaling twice. The synthetic samples produced by SMOTE have no natural file
 identifier, so the partitions are stored as serialised arrays rather than as
-individual image files.
+individual image files. The preprocessing run also writes a
+\texttt{preprocessing\_manifest.json} file containing the dataset location,
+package version, Git commit, preprocessing parameters, split distributions,
+and the SMOTE scope. This manifest is used as the audit trail connecting the
+generated arrays to a specific preprocessing run.
 
 %==========================================================================
 \section{Reproducibility}
