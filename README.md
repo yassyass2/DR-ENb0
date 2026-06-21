@@ -1,6 +1,8 @@
 # DR-ENb0 — Diabetic Retinopathy Severity Grading
 
-Research pipeline for diabetic retinopathy severity grading on APTOS 2019 fundus images using EfficientNet-B0 with explainable AI (Grad-
+Research pipeline for diabetic retinopathy severity grading on APTOS 2019 fundus images using EfficientNet-B0 with explainable AI (Grad-CAM).
+
+Built for the AI in Healthcare minor — Group 5 (Hogeschool Rotterdam).
 
 ## Getting Started
 
@@ -28,8 +30,14 @@ Research pipeline for diabetic retinopathy severity grading on APTOS 2019 fundus
 
 ```
 ├── capstone-project/
-│   ├── models/          # Model notebooks (EfficientNet-B0 variants)
-│   └── src/             # Source code / pipeline modules
+│   ├── configs/         # Configuration files
+│   ├── docs/            # Documentation
+│   ├── experiments/     # Experiment notebooks
+│   ├── final_models/    # Final model notebooks
+│   ├── scripts/         # Utility scripts
+│   ├── src/             # Source code / pipeline modules
+│   ├── tests/           # Tests
+│   └── main.py          # Entry point
 ├── pyproject.toml
 └── uv.lock
 ```
@@ -42,7 +50,7 @@ uv run main.py
 
 ## Models
 
-The model notebooks are located in the `capstone-project/models/` directory. Each notebook covers a specific model variant or experiment (e.g. baseline, SMOTE, focal loss).
+The model notebooks are located in the `capstone-project/final_models/` directory. Experiment notebooks can be found in `capstone-project/experiments/`.
 
 ## Dataset
 
