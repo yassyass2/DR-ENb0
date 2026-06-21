@@ -1,8 +1,6 @@
 # DR-ENb0 — Diabetic Retinopathy Severity Grading
 
-Research pipeline for diabetic retinopathy severity grading on APTOS 2019 fundus images using EfficientNet-B0 with explainable AI (Grad-CAM).
-
-Built for the AI in Healthcare minor — Group 5 (Hogeschool Rotterdam).
+Research pipeline for diabetic retinopathy severity grading on APTOS 2019 fundus images using EfficientNet-B0 with explainable AI (Grad-
 
 ## Getting Started
 
