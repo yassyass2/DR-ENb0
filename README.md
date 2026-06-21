@@ -36,6 +36,12 @@ Built for the AI in Healthcare minor — Group 5 (Hogeschool Rotterdam).
 └── uv.lock
 ```
 
+## Running the Preprocessing Pipeline
+
+```bash
+uv run main.py
+```
+
 ## Models
 
 The model notebooks are located in the `capstone-project/models/` directory. Each notebook covers a specific model variant or experiment (e.g. baseline, SMOTE, focal loss).
