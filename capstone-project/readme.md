@@ -44,6 +44,34 @@ uv run python capstone-project/scripts/predict_saved_model.py --model SMOTE_IoU.
 
 The script help dynamically shows the currently discovered `.keras` model names in `capstone-project/models/`.
 
+## Dataset Downloader Script
+
+If `dr_preprocessed_data.npz` is stored on Google Drive instead of GitHub, use:
+
+```bash
+uv run python capstone-project/scripts/download_preprocessed_npz.py
+```
+
+The downloader already knows the repository's default Google Drive link, but it also accepts a raw Google Drive file ID or another share URL:
+
+```bash
+uv run python capstone-project/scripts/download_preprocessed_npz.py "<file-id>"
+```
+
+By default it saves to:
+
+`capstone-project/models/preprocessed/dr_preprocessed_data.npz`
+
+Use `--force` to overwrite an existing file.
+
+When you run:
+
+```bash
+uv run python capstone-project/scripts/predict_saved_model.py
+```
+
+the script automatically downloads `dr_preprocessed_data.npz` first if it is not already present locally.
+
 ## Model Files
 
 Current saved `.keras` models:

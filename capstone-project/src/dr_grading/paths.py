@@ -19,3 +19,6 @@ DEFAULT_TRAINING_CONFIG = CONFIG_DIR / "efficientnet_b0.json"
 DEFAULT_TEST_REPORT = ARTIFACTS_DIR / "test_report.json"
 DEFAULT_SAVED_MODELS_DIR = MODELS_DIR
 DEFAULT_MODEL_PREPROCESSED_ARCHIVE = MODELS_DIR / "preprocessed" / "dr_preprocessed_data.npz"
+DEFAULT_MODEL_PREPROCESSED_DOWNLOAD_SOURCE = (
+    "https://drive.google.com/file/d/1vVVKvVr0b3AwXn3IEZkWktAEV-HIBkRS/view?usp=sharing"
+)

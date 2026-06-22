@@ -15,6 +15,8 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from dr_grading.data import DatasetSummary, load_preprocessed_data
+from dr_grading.download import ensure_preprocessed_archive, extract_file_id
+from dr_grading.paths import DEFAULT_MODEL_PREPROCESSED_DOWNLOAD_SOURCE
 from dr_grading.tracking import configure_mlflow, load_training_config
 
 
@@ -68,6 +70,20 @@ class TrainingStructureTests(unittest.TestCase):
         self.assertIsInstance(dataset.summary, DatasetSummary)
         self.assertEqual(dataset.summary.test_samples, 1)
         self.assertEqual(dataset.summary.class_distribution["test"], {0: 1})
+
+    def test_google_drive_link_extracts_expected_file_id(self) -> None:
+        file_id = extract_file_id(DEFAULT_MODEL_PREPROCESSED_DOWNLOAD_SOURCE)
+
+        self.assertEqual(file_id, "1vVVKvVr0b3AwXn3IEZkWktAEV-HIBkRS")
+
+    def test_ensure_preprocessed_archive_keeps_existing_local_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_path = Path(tmp) / "dr_preprocessed_data.npz"
+            archive_path.write_bytes(b"already here")
+
+            resolved = ensure_preprocessed_archive(archive_path)
+
+        self.assertEqual(resolved, archive_path.resolve())
 
     def test_configure_mlflow_uses_local_default_tracking_uri(self) -> None:
         previous = os.environ.pop("MLFLOW_TRACKING_URI", None)

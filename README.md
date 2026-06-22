@@ -67,6 +67,12 @@ Show script help with the current discovered model names:
 uv run python capstone-project/scripts/predict_saved_model.py --help
 ```
 
+Download the preprocessed `.npz` archive from Google Drive:
+
+```bash
+uv run python capstone-project/scripts/download_preprocessed_npz.py
+```
+
 ## Saved Models
 
 The `capstone-project/models/` folder currently contains these final saved `.keras` models:
@@ -95,6 +101,14 @@ It loads these arrays:
 - `X_test`, `y_test`
 
 By default the prediction script uses the `.npz` archive above, but it can also load a directory of split `.npy` arrays.
+
+If the archive is missing locally, `predict_saved_model.py` now downloads it automatically from the configured Google Drive link before running inference.
+
+You can also download it manually with:
+
+```bash
+uv run python capstone-project/scripts/download_preprocessed_npz.py
+```
 
 ## Prediction Output
 

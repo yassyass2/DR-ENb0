@@ -7,8 +7,10 @@ from pathlib import Path
 import numpy as np
 
 from dr_grading.data import PreprocessedDataset, load_preprocessed_data
+from dr_grading.download import ensure_preprocessed_archive
 from dr_grading.paths import (
     DEFAULT_MODEL_PREPROCESSED_ARCHIVE,
+    DEFAULT_MODEL_PREPROCESSED_DOWNLOAD_SOURCE,
     DEFAULT_SAVED_MODELS_DIR,
 )
 
@@ -54,7 +56,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--data",
         type=Path,
         default=DEFAULT_MODEL_PREPROCESSED_ARCHIVE,
-        help="Preprocessed dataset source: a .npz archive or directory of .npy arrays.",
+        help=(
+            "Preprocessed dataset source: a .npz archive or directory of .npy arrays. "
+            "If the archive is missing, the default .npz can be downloaded automatically."
+        ),
+    )
+    parser.add_argument(
+        "--download-source",
+        type=str,
+        default=DEFAULT_MODEL_PREPROCESSED_DOWNLOAD_SOURCE,
+        help=(
+            "Google Drive share URL or file ID used when the .npz archive is missing. "
+            "Defaults to the repository's configured dataset link."
+        ),
     )
     parser.add_argument(
         "--models-dir",
@@ -318,7 +332,11 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     model_path = resolve_model_path(args.model, models_dir)
-    dataset = load_preprocessed_data(args.data)
+    data_path = ensure_preprocessed_archive(
+        data_path=Path(args.data),
+        download_source=args.download_source,
+    )
+    dataset = load_preprocessed_data(data_path)
     X, _ = split_arrays(dataset, args.split)
     sample_index = select_sample_index(
         requested_index=args.index,
@@ -336,7 +354,7 @@ def main(argv: list[str] | None = None) -> None:
         top_k=args.top_k,
     )
 
-    print(f"Data path  : {Path(args.data).resolve()}")
+    print(f"Data path  : {data_path.resolve()}")
     print(
         "Dataset    : "
         f"train={dataset.summary.train_samples}, "
